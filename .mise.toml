@@ -1,0 +1,15 @@
+[tasks.sensor]
+description = "Run sensor service"
+run = "go run ./cmd/sensor"
+
+[tasks.dispatch]
+description = "Run dispatch service"
+run = "go run ./cmd/dispatch"
+
+[tasks.test]
+description = "Run all tests"
+run = "go test ./tests/..."
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."

@@ -1,0 +1,5 @@
+{
+  "bus": {
+    "url": "nats://signal-nats:4222"
+  }
+}

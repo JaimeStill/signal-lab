@@ -1,0 +1,8 @@
+root = "."
+tmp_dir = "tmp/sensor"
+
+[build]
+cmd = "go build -o ./tmp/sensor/server ./cmd/sensor"
+bin = "./tmp/sensor/server"
+include_ext = ["go", "json"]
+exclude_dir = ["tmp", "tests", "cmd/dispatch", "internal/dispatch"]
