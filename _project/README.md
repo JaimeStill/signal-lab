@@ -40,7 +40,7 @@ pkg/           → Reusable library packages
   signal/      → Signal envelope type
   discovery/   → Shared discovery types
   module/      → HTTP module/router system
-  middleware/  → HTTP middleware (CORS, Logger)
+  middleware/  → HTTP middleware (Logger)
   handlers/    → JSON response helpers
 tests/         → Black-box tests mirroring source structure
 ```
