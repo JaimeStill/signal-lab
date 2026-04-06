@@ -68,10 +68,32 @@ pkg/           → Reusable library packages
   signal/      → Signal envelope type
   discovery/   → Shared discovery types
   module/      → HTTP module/router system
-  middleware/  → HTTP middleware (CORS, Logger)
+  middleware/  → HTTP middleware (Logger)
   handlers/    → JSON response helpers
 tests/         → Black-box tests mirroring source structure
 _project/      → Architecture docs and phase implementation briefs
+```
+
+## API
+
+Both services expose the following endpoints:
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/healthz` | Health check — always returns `{"status": "ok"}` |
+| `GET` | `/readyz` | Readiness check — reports `ready` when lifecycle and bus are healthy |
+| `POST` | `/api/discovery/ping` | Broadcasts a discovery ping over NATS, returns `[]ServiceInfo` from responding services |
+
+```bash
+# health check
+curl localhost:3000/healthz
+
+# readiness check
+curl localhost:3000/readyz
+
+# discover other services (requires both services running)
+curl -s -X POST localhost:3000/api/discovery/ping | jq .
+curl -s -X POST localhost:3001/api/discovery/ping | jq .
 ```
 
 ## Development

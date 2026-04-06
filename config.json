@@ -2,7 +2,8 @@
   "bus": {
     "url": "nats://localhost:4222",
     "max_reconnects": 10,
-    "reconnect_wait": "2s"
+    "reconnect_wait": "2s",
+    "response_timeout": "500ms"
   },
   "sensor": {
     "port": 3000,
