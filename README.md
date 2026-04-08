@@ -55,45 +55,68 @@ Each phase explores a set of NATS capabilities, adding new HTTP endpoints to bot
 ## Project Structure
 
 ```
-cmd/           → Service entry points
-  sensor/      → Environment monitoring service (:3000)
-  dispatch/    → Response coordination service (:3001)
-internal/      → Private application packages
-  config/      → Shared configuration
-  sensor/      → Sensor domain logic
-  dispatch/    → Dispatch domain logic
-pkg/           → Reusable library packages
-  lifecycle/   → Startup/shutdown coordination
-  bus/         → Message bus connection management
-  signal/      → Signal envelope type
-  discovery/   → Shared discovery types
-  module/      → HTTP module/router system
-  middleware/  → HTTP middleware (Logger)
-  handlers/    → JSON response helpers
-tests/         → Black-box tests mirroring source structure
-_project/      → Architecture docs and phase implementation briefs
+cmd/                → Service entry points
+  sensor/           → Environment monitoring service (:3000)
+  dispatch/         → Response coordination service (:3001)
+internal/           → Private application packages
+  config/           → Shared configuration
+  sensor/           → Sensor module wiring + domain sub-packages
+    telemetry/      → Telemetry publisher domain
+  dispatch/         → Dispatch module wiring + domain sub-packages
+    monitoring/     → Telemetry monitoring domain
+pkg/                → Reusable library packages
+  lifecycle/        → Startup/shutdown coordination
+  bus/              → Message bus System (connection + subscriptions)
+  signal/           → Signal envelope type
+  discovery/        → Discovery domain (System + Handler)
+  routes/           → Route group composition
+  module/           → HTTP module/router system
+  middleware/       → HTTP middleware (Logger)
+  handlers/         → JSON response helpers
+tests/              → Black-box tests mirroring source structure
+_project/           → Architecture docs and phase implementation briefs
 ```
 
 ## API
 
-Both services expose the following endpoints:
+### Both Services
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/healthz` | Health check — always returns `{"status": "ok"}` |
-| `GET` | `/readyz` | Readiness check — reports `ready` when lifecycle and bus are healthy |
-| `POST` | `/api/discovery/ping` | Broadcasts a discovery ping over NATS, returns `[]ServiceInfo` from responding services |
+| `GET` | `/healthz` | Health check |
+| `GET` | `/readyz` | Readiness check |
+| `POST` | `/api/discovery/ping` | Discover other services via NATS |
+
+### Sensor (`:3000`)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/telemetry/start` | Begin publishing simulated readings |
+| `POST` | `/api/telemetry/stop` | Stop publishing |
+| `GET` | `/api/telemetry/status` | Publisher state (running, interval, types, zones) |
+
+### Dispatch (`:3001`)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/monitoring/stream` | SSE stream of received telemetry signals |
+| `GET` | `/api/monitoring/status` | Subscription state and message counts |
 
 ```bash
-# health check
-curl localhost:3000/healthz
-
-# readiness check
-curl localhost:3000/readyz
-
 # discover other services (requires both services running)
-curl -s -X POST localhost:3000/api/discovery/ping | jq .
-curl -s -X POST localhost:3001/api/discovery/ping | jq .
+curl -s -X POST localhost:3000/api/discovery/ping | jq
+
+# start telemetry publisher
+curl -s -X POST localhost:3000/api/telemetry/start | jq
+
+# stream telemetry on dispatch (Ctrl+C to stop)
+curl -s -N localhost:3001/api/monitoring/stream
+
+# check monitoring counts
+curl -s localhost:3001/api/monitoring/status | jq
+
+# stop telemetry publisher
+curl -s -X POST localhost:3000/api/telemetry/stop | jq
 ```
 
 ## Development

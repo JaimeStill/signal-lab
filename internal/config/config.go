@@ -97,6 +97,9 @@ func (c *Config) finalize() error {
 	if err := c.Sensor.Finalize("SENSOR"); err != nil {
 		return fmt.Errorf("sensor: %w", err)
 	}
+	if err := c.Sensor.Telemetry.Finalize(); err != nil {
+		return fmt.Errorf("sensor telemetry: %w", err)
+	}
 	if err := c.Dispatch.Finalize("DISPATCH"); err != nil {
 		return fmt.Errorf("dispatch: %w", err)
 	}

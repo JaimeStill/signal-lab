@@ -13,8 +13,12 @@ signal-lab follows the Layered Composition Architecture (LCA) from herald: cold 
 ### Package Structure
 
 - `cmd/` — Entry points (`package main`), one per service
-- `internal/` — Private application packages (config, sensor domain, dispatch domain)
-- `pkg/` — Reusable library packages (lifecycle, bus, signal, discovery, module, middleware, handlers)
+- `internal/` — Private application packages (config, service-specific domains)
+- `pkg/` — Reusable library packages (lifecycle, bus, signal, discovery, routes, module, middleware, handlers)
+
+#### `pkg/` vs `internal/` Boundary
+
+Features in `pkg/` are general-purpose infrastructure usable by any service (bus, discovery, routes, lifecycle). Service-specific domains live under `internal/{service}/{domain}/` as sub-packages (e.g., `internal/sensor/telemetry/`, `internal/dispatch/monitoring/`).
 
 ### Configuration Pattern
 
@@ -26,6 +30,32 @@ Every config struct follows the three-phase finalize pattern:
 Public API: `Finalize(env)` and `Merge(overlay)`. All env vars use the `SIGNAL_` prefix.
 
 Config loading: `config.json` (base) → `config.<SIGNAL_ENV>.json` (overlay) → `secrets.json` (gitignored) → `SIGNAL_*` env vars (overrides).
+
+### Systems Pattern
+
+Infrastructure and domain packages expose a `System` interface with an unexported implementing struct, mirroring herald's `database.System` pattern:
+
+- **Infrastructure systems** (`pkg/bus/`): `New()` (cold start, pure init) → `Start(lc)` (hot start, connections + lifecycle hooks)
+- **Domain systems** (`pkg/discovery/`, `internal/{service}/{domain}/`): `New()` creates the system, `Subscribe()` initializes bus subscriptions, `Handler()` returns the HTTP handler
+
+Systems are the primary unit of composition. Each system owns its own bus interactions and produces its own handler via factory method.
+
+### Domain Separation
+
+Follows herald's repository/handler pattern. Each domain has three concerns:
+
+1. **System** (domain logic) — `System` interface + unexported struct. Owns bus interactions, subscription callbacks, and domain operations. Depends on `bus.System`.
+2. **Handler** (HTTP) — Struct depending on its domain `System` interface. Pure HTTP: parses requests, calls domain methods, formats responses. Never touches bus directly. Exposes `Routes() routes.Group` to encapsulate its own route definitions.
+3. **Module wiring** (`api.go`) — Creates domain systems, initializes subscriptions (decoupled from handlers), collects route groups, registers with mux.
+
+Each service's wiring layer follows herald's API pattern:
+- `domain.go` — assembles all domain systems for the service
+- `routes.go` — collects route groups from domain handlers, calls `routes.Register(mux, ...)`
+- `api.go` — orchestrates domain creation, subscription init, route registration, returns `*module.Module`
+
+### Route Groups
+
+Handlers encapsulate their own route definitions via `Routes() routes.Group` (from `pkg/routes/`). Route groups compose with prefix flattening — no central endpoint registry. New domains add routes by returning a group from their handler.
 
 ### Dependency Hierarchy
 
@@ -62,6 +92,8 @@ Each phase is executed in a separate Claude Code session:
 4. Merge PR to `main` before starting the next phase
 
 Phase documents in `_project/phase-XX.md` initialize each session's scope.
+
+After any planning phase, capture new conventions established during planning in `.claude/CLAUDE.md`. This builds the foundation for decomposing conventions into skills once development phases are complete.
 
 ## Development
 

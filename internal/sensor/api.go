@@ -3,30 +3,28 @@ package sensor
 import (
 	"log/slog"
 	"net/http"
-	"time"
 
-	"github.com/nats-io/nats.go"
-
+	"github.com/JaimeStill/signal-lab/internal/config"
+	"github.com/JaimeStill/signal-lab/pkg/bus"
 	"github.com/JaimeStill/signal-lab/pkg/discovery"
 	"github.com/JaimeStill/signal-lab/pkg/module"
 )
 
-// NewModule creates the sensor API module with discovery routes and NATS subscription.
+// NewModule creates the sensor API module with discovery and telemetry domains.
 func NewModule(
-	conn *nats.Conn,
+	b bus.System,
 	info discovery.ServiceInfo,
-	timeout time.Duration,
+	cfg *config.Config,
 	logger *slog.Logger,
-) (*module.Module, *nats.Subscription, error) {
-	disc := NewDiscovery(conn, info, timeout, logger)
+) (*module.Module, error) {
+	domain := NewDomain(b, info, cfg, logger)
 
-	sub, err := disc.Subscribe()
-	if err != nil {
-		return nil, nil, err
+	if err := domain.Discovery.Subscribe(); err != nil {
+		return nil, err
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /discovery/ping", disc.HandlePing)
+	registerRoutes(mux, domain)
 
-	return module.New("/api", mux), sub, nil
+	return module.New("/api", mux), nil
 }

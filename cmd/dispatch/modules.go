@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"time"
 
-	"github.com/nats-io/nats.go"
-
+	"github.com/JaimeStill/signal-lab/internal/config"
 	"github.com/JaimeStill/signal-lab/internal/dispatch"
+	"github.com/JaimeStill/signal-lab/pkg/bus"
 	"github.com/JaimeStill/signal-lab/pkg/discovery"
 	"github.com/JaimeStill/signal-lab/pkg/lifecycle"
 	"github.com/JaimeStill/signal-lab/pkg/middleware"
@@ -17,23 +16,23 @@ import (
 
 func buildHandler(
 	lc *lifecycle.Coordinator,
-	conn *nats.Conn,
+	b bus.System,
 	info discovery.ServiceInfo,
-	timeout time.Duration,
+	cfg *config.Config,
 	logger *slog.Logger,
-) (http.Handler, *nats.Subscription, error) {
+) (http.Handler, error) {
 	router := buildRouter(lc)
 
-	mod, sub, err := dispatch.NewModule(conn, info, timeout, logger)
+	mod, err := dispatch.NewModule(b, info, cfg, logger)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	router.Mount(mod)
 
 	mw := middleware.New()
 	mw.Use(middleware.Logger(logger))
 
-	return mw.Apply(router), sub, nil
+	return mw.Apply(router), nil
 }
 
 func buildRouter(lc *lifecycle.Coordinator) *module.Router {
