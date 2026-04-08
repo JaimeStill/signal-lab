@@ -29,23 +29,28 @@ Both services follow the LCA pattern adapted from the [herald](https://github.co
 ### Package Hierarchy
 
 ```
-cmd/           → Entry points (package main), one per service
-internal/      → Private application packages
-  config/      → Shared configuration (three-phase finalize)
-  sensor/      → Sensor domain logic
-  dispatch/    → Dispatch domain logic
-pkg/           → Reusable library packages
-  lifecycle/   → Startup/shutdown coordination
-  bus/         → Message bus connection management
-  signal/      → Signal envelope type
-  discovery/   → Shared discovery types
-  module/      → HTTP module/router system
-  middleware/  → HTTP middleware (Logger)
-  handlers/    → JSON response helpers
-tests/         → Black-box tests mirroring source structure
+cmd/                → Entry points (package main), one per service
+internal/           → Private application packages
+  config/           → Shared configuration (three-phase finalize)
+  sensor/           → Sensor module wiring (domain.go, routes.go, api.go)
+    telemetry/      → Telemetry publisher domain (System + Handler)
+  dispatch/         → Dispatch module wiring (domain.go, routes.go, api.go)
+    monitoring/     → Telemetry monitoring domain (System + Handler)
+pkg/                → Reusable library packages
+  lifecycle/        → Startup/shutdown coordination
+  bus/              → Message bus System (connection + subscription management)
+  signal/           → Signal envelope type
+  discovery/        → Discovery domain (System + Handler + ServiceInfo)
+  routes/           → Route group composition
+  module/           → HTTP module/router system
+  middleware/       → HTTP middleware (Logger)
+  handlers/         → JSON response helpers
+tests/              → Black-box tests mirroring source structure
 ```
 
 Dependencies flow downward: `cmd/` → `internal/` → `pkg/`. Lower-level packages define contracts; higher-level packages implement them.
+
+General-purpose features live in `pkg/` (bus, discovery, routes). Service-specific domains live under `internal/{service}/{domain}/` as sub-packages. Each domain exposes a `System` interface with an unexported implementing struct, following herald's repository/handler pattern.
 
 ## Configuration
 

@@ -32,6 +32,10 @@ app/                             # Web client source (Lit or vanilla JS — TBD)
   dist/                          # Built assets (embedded in binary)
 ```
 
+### SSE → WebSocket Migration
+
+Phase 2's monitoring SSE stream (`GET /api/monitoring/stream`) uses a single channel, meaning only one SSE client receives each telemetry message. Phase 8's hub pattern replaces this with proper fan-out — the hub manages multiple client connections and broadcasts each signal to all subscribers.
+
 ### Lifecycle Integration
 
 The hub is a lifecycle participant:

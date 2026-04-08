@@ -8,7 +8,12 @@
   "sensor": {
     "port": 3000,
     "name": "sensor",
-    "description": "Environment monitoring service"
+    "description": "Environment monitoring service",
+    "telemetry": {
+      "interval": "2s",
+      "types": ["temp", "humidity", "pressure"],
+      "zones": ["server-room", "ops-center"]
+    }
   },
   "dispatch": {
     "port": 3001,

@@ -23,86 +23,155 @@ func (c *testConfig) Options(logger *slog.Logger) []nats.Option {
 	}
 }
 
-func tryConnect(t *testing.T) *nats.Conn {
+func tryStart(t *testing.T) bus.System {
 	t.Helper()
 	logger := slog.Default()
 	cfg := &testConfig{url: nats.DefaultURL}
 
-	conn, err := bus.Connect(cfg, logger)
-	if err != nil {
+	b := bus.New(cfg, 5*time.Second, logger)
+	lc := lifecycle.New()
+
+	if err := b.Start(lc); err != nil {
 		t.Skip("NATS not available, skipping:", err)
 	}
-	t.Cleanup(func() { conn.Close() })
-	return conn
+
+	t.Cleanup(func() {
+		lc.Shutdown(5 * time.Second)
+	})
+
+	return b
 }
 
-func TestConnectSuccess(t *testing.T) {
-	conn := tryConnect(t)
-	if !conn.IsConnected() {
+func TestNew(t *testing.T) {
+	logger := slog.Default()
+	cfg := &testConfig{url: nats.DefaultURL}
+
+	b := bus.New(cfg, 5*time.Second, logger)
+	if b.Conn() != nil {
+		t.Fatal("expected nil connection before Start")
+	}
+}
+
+func TestStartSuccess(t *testing.T) {
+	b := tryStart(t)
+
+	if b.Conn() == nil {
+		t.Fatal("expected non-nil connection after Start")
+	}
+	if !b.Conn().IsConnected() {
 		t.Fatal("expected connection to be active")
 	}
 }
 
-func TestConnectFailure(t *testing.T) {
+func TestStartFailure(t *testing.T) {
 	logger := slog.Default()
 	cfg := &testConfig{url: "nats://invalid:9999"}
 
-	_, err := bus.Connect(cfg, logger)
-	if err == nil {
+	b := bus.New(cfg, 5*time.Second, logger)
+	lc := lifecycle.New()
+
+	if err := b.Start(lc); err == nil {
 		t.Fatal("expected connection error")
 	}
 }
 
-func TestChecker(t *testing.T) {
-	conn := tryConnect(t)
-
-	checker := bus.NewChecker(conn)
-	if !checker.Ready() {
-		t.Fatal("expected Ready() to be true when connected")
-	}
-
-	conn.Close()
-	if checker.Ready() {
-		t.Fatal("expected Ready() to be false after close")
-	}
-}
-
-func TestDrain(t *testing.T) {
+func TestReadyViaLifecycle(t *testing.T) {
 	logger := slog.Default()
 	cfg := &testConfig{url: nats.DefaultURL}
 
-	conn, err := bus.Connect(cfg, logger)
-	if err != nil {
-		t.Skip("NATS not available, skipping:", err)
-	}
-
-	if err := bus.Drain(conn, 5*time.Second); err != nil {
-		t.Fatal("drain failed:", err)
-	}
-
-	if !conn.IsClosed() {
-		t.Fatal("expected connection to be closed after drain")
-	}
-}
-
-func TestRegisterLifecycle(t *testing.T) {
-	logger := slog.Default()
-	cfg := &testConfig{url: nats.DefaultURL}
-
-	conn, err := bus.Connect(cfg, logger)
-	if err != nil {
-		t.Skip("NATS not available, skipping:", err)
-	}
-
+	b := bus.New(cfg, 5*time.Second, logger)
 	lc := lifecycle.New()
-	bus.RegisterLifecycle(conn, lc, 5*time.Second)
+
+	if err := b.Start(lc); err != nil {
+		t.Skip("NATS not available, skipping:", err)
+	}
+	t.Cleanup(func() { lc.Shutdown(5 * time.Second) })
+
+	lc.WaitForStartup()
+
+	if !lc.Ready() {
+		t.Fatal("expected lifecycle Ready() to be true after bus Start")
+	}
+}
+
+func TestSubscribe(t *testing.T) {
+	b := tryStart(t)
+
+	if err := b.Subscribe("test.subject", func(_ *nats.Msg) {}); err != nil {
+		t.Fatal("subscribe failed:", err)
+	}
+
+	// Duplicate subscription should fail
+	if err := b.Subscribe("test.subject", func(_ *nats.Msg) {}); err == nil {
+		t.Fatal("expected error for duplicate subscription")
+	}
+}
+
+func TestUnsubscribe(t *testing.T) {
+	b := tryStart(t)
+
+	if err := b.Subscribe("test.subject", func(_ *nats.Msg) {}); err != nil {
+		t.Fatal("subscribe failed:", err)
+	}
+
+	if err := b.Unsubscribe("test.subject"); err != nil {
+		t.Fatal("unsubscribe failed:", err)
+	}
+
+	// Unsubscribing again should fail
+	if err := b.Unsubscribe("test.subject"); err == nil {
+		t.Fatal("expected error for unknown subject")
+	}
+
+	// Should be able to re-subscribe after unsubscribe
+	if err := b.Subscribe("test.subject", func(_ *nats.Msg) {}); err != nil {
+		t.Fatal("re-subscribe after unsubscribe failed:", err)
+	}
+}
+
+func TestLifecycleShutdown(t *testing.T) {
+	logger := slog.Default()
+	cfg := &testConfig{url: nats.DefaultURL}
+
+	b := bus.New(cfg, 5*time.Second, logger)
+	lc := lifecycle.New()
+
+	if err := b.Start(lc); err != nil {
+		t.Skip("NATS not available, skipping:", err)
+	}
+
+	b.Subscribe("test.shutdown", func(_ *nats.Msg) {})
 	lc.WaitForStartup()
 
 	if err := lc.Shutdown(5 * time.Second); err != nil {
 		t.Fatal("shutdown failed:", err)
 	}
 
-	if !conn.IsClosed() {
+	if !b.Conn().IsClosed() {
 		t.Fatal("expected connection to be closed after lifecycle shutdown")
+	}
+}
+
+func TestSubscribeAndReceive(t *testing.T) {
+	b := tryStart(t)
+
+	received := make(chan string, 1)
+	if err := b.Subscribe("test.receive", func(msg *nats.Msg) {
+		received <- string(msg.Data)
+	}); err != nil {
+		t.Fatal("subscribe failed:", err)
+	}
+
+	if err := b.Conn().Publish("test.receive", []byte("hello")); err != nil {
+		t.Fatal("publish failed:", err)
+	}
+
+	select {
+	case msg := <-received:
+		if msg != "hello" {
+			t.Fatalf("expected 'hello', got %q", msg)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for message")
 	}
 }
