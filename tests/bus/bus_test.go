@@ -152,6 +152,89 @@ func TestLifecycleShutdown(t *testing.T) {
 	}
 }
 
+func TestQueueSubscribe(t *testing.T) {
+	b := tryStart(t)
+
+	received := make(chan string, 1)
+	if err := b.QueueSubscribe("test.queue", "workers", func(msg *nats.Msg) {
+		received <- string(msg.Data)
+	}); err != nil {
+		t.Fatal("queue subscribe failed:", err)
+	}
+
+	if err := b.Conn().Publish("test.queue", []byte("hello")); err != nil {
+		t.Fatal("publish failed:", err)
+	}
+
+	select {
+	case msg := <-received:
+		if msg != "hello" {
+			t.Fatalf("expected 'hello', got %q", msg)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for message")
+	}
+}
+
+func TestQueueSubscribeDuplicate(t *testing.T) {
+	b := tryStart(t)
+
+	if err := b.QueueSubscribe("test.queue.dup", "workers", func(_ *nats.Msg) {}); err != nil {
+		t.Fatal("queue subscribe failed:", err)
+	}
+
+	if err := b.QueueSubscribe("test.queue.dup", "workers", func(_ *nats.Msg) {}); err == nil {
+		t.Fatal("expected error for duplicate queue subscription")
+	}
+}
+
+func TestQueueSubscribeDistribution(t *testing.T) {
+	b1 := tryStart(t)
+	b2 := tryStart(t)
+
+	const total = 100
+	count1 := make(chan struct{}, total)
+	count2 := make(chan struct{}, total)
+
+	if err := b1.QueueSubscribe("test.queue.dist", "workers", func(_ *nats.Msg) {
+		count1 <- struct{}{}
+	}); err != nil {
+		t.Fatal("queue subscribe b1 failed:", err)
+	}
+
+	if err := b2.QueueSubscribe("test.queue.dist", "workers", func(_ *nats.Msg) {
+		count2 <- struct{}{}
+	}); err != nil {
+		t.Fatal("queue subscribe b2 failed:", err)
+	}
+
+	// Allow subscriptions to propagate
+	b1.Conn().Flush()
+	b2.Conn().Flush()
+
+	for range total {
+		if err := b1.Conn().Publish("test.queue.dist", []byte("msg")); err != nil {
+			t.Fatal("publish failed:", err)
+		}
+	}
+	b1.Conn().Flush()
+
+	// Wait for all messages to arrive
+	time.Sleep(500 * time.Millisecond)
+
+	got1 := len(count1)
+	got2 := len(count2)
+
+	if got1+got2 != total {
+		t.Fatalf("expected %d total messages, got %d + %d = %d", total, got1, got2, got1+got2)
+	}
+
+	// Each subscriber should get at least 20% (generous bound for 100 messages)
+	if got1 < 20 || got2 < 20 {
+		t.Fatalf("uneven distribution: b1=%d, b2=%d (expected each >= 20)", got1, got2)
+	}
+}
+
 func TestSubscribeAndReceive(t *testing.T) {
 	b := tryStart(t)
 

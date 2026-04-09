@@ -7,12 +7,14 @@ import (
 )
 
 func registerRoutes(mux *http.ServeMux, domain *Domain) {
-	dh := domain.Discovery.Handler()
-	th := domain.Telemetry.Handler()
+	discoveryHandler := domain.Discovery.Handler()
+	telemetryHandler := domain.Telemetry.Handler()
+	alertHandler := domain.Alerts.Handler()
 
 	routes.Register(
 		mux,
-		dh.Routes(),
-		th.Routes(),
+		discoveryHandler.Routes(),
+		telemetryHandler.Routes(),
+		alertHandler.Routes(),
 	)
 }
