@@ -10,17 +10,11 @@ import (
 
 	"github.com/JaimeStill/signal-lab/pkg/bus"
 	"github.com/JaimeStill/signal-lab/pkg/signal"
+
+	contracts "github.com/JaimeStill/signal-lab/pkg/contracts/telemetry"
 )
 
-const subjectPrefix = "signal.telemetry"
-
-// Reading represents a single telemetry measurement.
-type Reading struct {
-	Type  string  `json:"type"`
-	Zone  string  `json:"zone"`
-	Value float64 `json:"value"`
-	Unit  string  `json:"unit"`
-}
+type Reading = contracts.Reading
 
 // Status reports the current state of the telemetry publisher.
 type Status struct {
@@ -147,7 +141,7 @@ func (t *telemetry) publish(ctx context.Context) {
 						Unit:  unitFor(typ),
 					}
 
-					subject := fmt.Sprintf("%s.%s.%s", subjectPrefix, typ, zone)
+					subject := fmt.Sprintf("%s.%s.%s", contracts.SubjectPrefix, typ, zone)
 
 					sig, err := signal.New(t.source, subject, reading)
 					if err != nil {

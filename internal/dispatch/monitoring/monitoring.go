@@ -10,9 +10,9 @@ import (
 
 	"github.com/JaimeStill/signal-lab/pkg/bus"
 	"github.com/JaimeStill/signal-lab/pkg/signal"
-)
 
-const telemetrySubject = "signal.telemetry.>"
+	contracts "github.com/JaimeStill/signal-lab/pkg/contracts/telemetry"
+)
 
 // Status reports the current state of telemetry monitoring.
 type Status struct {
@@ -51,12 +51,12 @@ func New(b bus.System, logger *slog.Logger) System {
 
 // Subscribe registers the telemetry wildcard subscription with the bus.
 func (m *monitor) Subscribe() error {
-	if err := m.bus.Subscribe(telemetrySubject, m.onTelemetry); err != nil {
+	if err := m.bus.Subscribe(contracts.SubjectWildcard, m.onTelemetry); err != nil {
 		return fmt.Errorf("subscribe telemetry: %w", err)
 	}
 
 	m.subscribed = true
-	m.logger.Info("subscribed to telemetry", "subject", telemetrySubject)
+	m.logger.Info("subscribed to telemetry", "subject", contracts.SubjectWildcard)
 	return nil
 }
 

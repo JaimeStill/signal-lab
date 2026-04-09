@@ -10,14 +10,12 @@ import (
 const (
 	EnvTelemetryInterval = "SIGNAL_TELEMETRY_INTERVAL"
 	EnvTelemetryTypes    = "SIGNAL_TELEMETRY_TYPES"
-	EnvTelemetryZones    = "SIGNAL_TELEMETRY_ZONES"
 )
 
 // TelemetryConfig holds telemetry publisher parameters.
 type TelemetryConfig struct {
 	Interval string   `json:"interval"`
 	Types    []string `json:"types"`
-	Zones    []string `json:"zones"`
 }
 
 // IntervalDuration returns Interval as a time.Duration.
@@ -41,9 +39,6 @@ func (c *TelemetryConfig) Merge(overlay *TelemetryConfig) {
 	if len(overlay.Types) > 0 {
 		c.Types = overlay.Types
 	}
-	if len(overlay.Zones) > 0 {
-		c.Zones = overlay.Zones
-	}
 }
 
 func (c *TelemetryConfig) loadDefaults() {
@@ -57,12 +52,6 @@ func (c *TelemetryConfig) loadDefaults() {
 			"pressure",
 		}
 	}
-	if len(c.Zones) == 0 {
-		c.Zones = []string{
-			"zone-a",
-			"zone-b",
-		}
-	}
 }
 
 func (c *TelemetryConfig) loadEnv() {
@@ -72,9 +61,6 @@ func (c *TelemetryConfig) loadEnv() {
 	if v := os.Getenv(EnvTelemetryTypes); v != "" {
 		c.Types = strings.Split(v, ",")
 	}
-	if v := os.Getenv(EnvTelemetryZones); v != "" {
-		c.Zones = strings.Split(v, ",")
-	}
 }
 
 func (c *TelemetryConfig) validate() error {
@@ -83,9 +69,6 @@ func (c *TelemetryConfig) validate() error {
 	}
 	if len(c.Types) == 0 {
 		return fmt.Errorf("telemetry types must not be empty")
-	}
-	if len(c.Zones) == 0 {
-		return fmt.Errorf("telemetry zones must not be empty")
 	}
 	return nil
 }

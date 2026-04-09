@@ -18,6 +18,8 @@ type System interface {
 	Conn() *nats.Conn
 	// Subscribe creates a NATS subscription and tracks it by subject.
 	Subscribe(subject string, handler nats.MsgHandler) error
+	// QueueSubscribe creates a NATS queue subscriptoin and tracks it by subject.
+	QueueSubscribe(subject, queue string, handler nats.MsgHandler) error
 	// Unsubscribe drains and removes a tracked subscription by subject.
 	Unsubscribe(subject string) error
 	// Start connects to NATS and registers lifecycle hooks.
@@ -64,6 +66,25 @@ func (b *bus) Subscribe(subject string, handler nats.MsgHandler) error {
 
 	b.subs[subject] = sub
 	b.logger.Info("subscribed", "subject", subject)
+	return nil
+}
+
+// QueueSubscribe creates a NATS queue subscriptoin and tracks it by subject.
+func (b *bus) QueueSubscribe(subject, queue string, handler nats.MsgHandler) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if _, exists := b.subs[subject]; exists {
+		return fmt.Errorf("subscription already exists for subject: %s", subject)
+	}
+
+	sub, err := b.conn.QueueSubscribe(subject, queue, handler)
+	if err != nil {
+		return fmt.Errorf("queue subscribe %s [%s]: %w", subject, queue, err)
+	}
+
+	b.subs[subject] = sub
+	b.logger.Info("queue subscribed", "subject", subject, "queue", queue)
 	return nil
 }
 

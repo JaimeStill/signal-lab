@@ -15,10 +15,15 @@ signal-lab follows the Layered Composition Architecture (LCA) from herald: cold 
 - `cmd/` — Entry points (`package main`), one per service
 - `internal/` — Private application packages (config, service-specific domains)
 - `pkg/` — Reusable library packages (lifecycle, bus, signal, discovery, routes, module, middleware, handlers)
+- `pkg/contracts/` — Shared cross-service contracts (types, constants, subject prefixes, header keys)
 
 #### `pkg/` vs `internal/` Boundary
 
-Features in `pkg/` are general-purpose infrastructure usable by any service (bus, discovery, routes, lifecycle). Service-specific domains live under `internal/{service}/{domain}/` as sub-packages (e.g., `internal/sensor/telemetry/`, `internal/dispatch/monitoring/`).
+Features in `pkg/` are general-purpose infrastructure usable by any service (bus, discovery, routes, lifecycle). Shared cross-service contracts live under `pkg/contracts/{domain}/` — these define the data and protocol layer between services (payload types, subject constants, header keys). Service-specific domains live under `internal/{service}/{domain}/` as sub-packages (e.g., `internal/sensor/telemetry/`, `internal/dispatch/monitoring/`).
+
+#### Phase Preservation
+
+Each phase's domains and endpoints remain intact. New phases add new domains, never modify existing ones. Only `pkg/` infrastructure and service wiring layers (domain.go, routes.go, api.go) are modified to integrate new domains.
 
 ### Configuration Pattern
 
@@ -30,6 +35,10 @@ Every config struct follows the three-phase finalize pattern:
 Public API: `Finalize(env)` and `Merge(overlay)`. All env vars use the `SIGNAL_` prefix.
 
 Config loading: `config.json` (base) → `config.<SIGNAL_ENV>.json` (overlay) → `secrets.json` (gitignored) → `SIGNAL_*` env vars (overrides).
+
+#### Config Decomposition
+
+`ServiceConfig` holds only shared web service fields (Host, Port, Name, Description). Service-specific configs embed `ServiceConfig` and add domain configs. For example, `SensorConfig` embeds `ServiceConfig` and adds Zones, TelemetryConfig, and AlertsConfig. Shared fields (like Zones) lift to the service-specific config level rather than individual domain configs.
 
 ### Systems Pattern
 
@@ -65,35 +74,38 @@ Lower-level packages (`pkg/`) define contracts (interfaces). Higher-level packag
 
 - `signal.discovery.ping` — service discovery
 - `signal.telemetry.{type}.{zone}` — sensor readings
+- `signal.alerts.{severity}` — priority-tagged alerts
 - `signal.control.{target}` — adjustment commands
 - `signal.threshold.{key}` — configuration changes
 
 ## Session Workflow
 
-Development is **interactive and guided** — AI describes what to do, the developer implements, AI validates.
+Development follows the `/iterative-dev` workflow with GitHub issues and implementation guides.
 
-### AI Responsibilities
+### Role Separation
 
-- Tests (`tests/`) — all test authorship
-- Documentation (`_project/`, CLAUDE.md, directory READMEs) — all doc maintenance
-- Contextual artifacts — phase docs, commit messages, PRs
+**Developer implements:** All source code, configuration files, infrastructure definitions.
 
-### Developer Implements
+**AI owns:** Tests (`tests/`), documentation (CLAUDE.md, README), implementation guides, contextual artifacts (commit messages, PRs, issues).
 
-- All source code, configuration files, infrastructure definitions
-- AI guides step by step, one logical unit at a time
+### Workflow
+
+1. Phase documents in `_project/phase-XX.md` define scope
+2. AI creates a GitHub issue for the phase
+3. AI generates an implementation guide at `.claude/context/guides/` as the step-by-step reference
+4. Developer executes the guide
+5. AI validates, writes tests, updates documentation
+6. AI commits, pushes, creates PR, and creates the next phase's issue
 
 ### Git Workflow
 
 Each phase is executed in a separate Claude Code session:
-1. Create branch from `main`: `phase-XX-description`
-2. Work interactively through the phase
+1. Create branch from `main`: `phase-XX-description` (issue-based naming from Phase 4+)
+2. Work through the phase using the implementation guide
 3. AI commits, pushes, and creates a PR when implementation is verified
 4. Merge PR to `main` before starting the next phase
 
-Phase documents in `_project/phase-XX.md` initialize each session's scope.
-
-After any planning phase, capture new conventions established during planning in `.claude/CLAUDE.md`. This builds the foundation for decomposing conventions into skills once development phases are complete.
+After any planning phase, capture new conventions established during planning in `.claude/CLAUDE.md`.
 
 ## Development
 

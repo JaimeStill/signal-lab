@@ -7,8 +7,14 @@ import (
 )
 
 func registerRoutes(mux *http.ServeMux, domain *Domain) {
-	dh := domain.Discovery.Handler()
-	mh := domain.Monitor.Handler()
+	discoveryHandler := domain.Discovery.Handler()
+	monitorHandler := domain.Monitor.Handler()
+	alertHandler := domain.Alert.Handler()
 
-	routes.Register(mux, dh.Routes(), mh.Routes())
+	routes.Register(
+		mux,
+		discoveryHandler.Routes(),
+		monitorHandler.Routes(),
+		alertHandler.Routes(),
+	)
 }

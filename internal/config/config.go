@@ -19,7 +19,7 @@ const (
 // Config is the root configuration for signal-lab services.
 type Config struct {
 	Bus             BusConfig     `json:"bus"`
-	Sensor          ServiceConfig `json:"sensor"`
+	Sensor          SensorConfig  `json:"sensor"`
 	Dispatch        ServiceConfig `json:"dispatch"`
 	ShutdownTimeout string        `json:"shutdown_timeout"`
 }
@@ -96,9 +96,6 @@ func (c *Config) finalize() error {
 	}
 	if err := c.Sensor.Finalize("SENSOR"); err != nil {
 		return fmt.Errorf("sensor: %w", err)
-	}
-	if err := c.Sensor.Telemetry.Finalize(); err != nil {
-		return fmt.Errorf("sensor telemetry: %w", err)
 	}
 	if err := c.Dispatch.Finalize("DISPATCH"); err != nil {
 		return fmt.Errorf("dispatch: %w", err)

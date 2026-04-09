@@ -27,6 +27,10 @@ func NewModule(
 		return nil, err
 	}
 
+	if err := domain.Alert.Subscribe(); err != nil {
+		return nil, err
+	}
+
 	mux := http.NewServeMux()
 	registerRoutes(mux, domain)
 

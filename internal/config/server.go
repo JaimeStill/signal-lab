@@ -9,11 +9,10 @@ import (
 
 // ServiceConfig holds per-service HTTP server parameterss
 type ServiceConfig struct {
-	Host        string          `json:"host"`
-	Port        int             `json:"port"`
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Telemetry   TelemetryConfig `json:"telemetry,omitempty"`
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // Addr returns the host:port listen address.
@@ -42,7 +41,6 @@ func (c *ServiceConfig) Merge(overlay *ServiceConfig) {
 	if overlay.Description != "" {
 		c.Description = overlay.Description
 	}
-	c.Telemetry.Merge(&overlay.Telemetry)
 }
 
 func (c *ServiceConfig) loadDefaults() {

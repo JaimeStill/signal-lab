@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/JaimeStill/signal-lab/internal/config"
+	"github.com/JaimeStill/signal-lab/internal/sensor/alerts"
 	"github.com/JaimeStill/signal-lab/internal/sensor/telemetry"
 	"github.com/JaimeStill/signal-lab/pkg/bus"
 	"github.com/JaimeStill/signal-lab/pkg/discovery"
@@ -13,6 +14,7 @@ import (
 type Domain struct {
 	Discovery discovery.System
 	Telemetry telemetry.System
+	Alerts    alerts.System
 }
 
 // NewDomain creates the sensor domain systems.
@@ -22,7 +24,8 @@ func NewDomain(
 	cfg *config.Config,
 	logger *slog.Logger,
 ) *Domain {
-	telCfg := &cfg.Sensor.Telemetry
+	telemetryConfig := &cfg.Sensor.Telemetry
+	alertConfig := &cfg.Sensor.Alerts
 
 	disc := discovery.New(
 		b, info,
@@ -33,14 +36,23 @@ func NewDomain(
 	tel := telemetry.New(
 		b,
 		info.Name,
-		telCfg.IntervalDuration(),
-		telCfg.Types,
-		telCfg.Zones,
+		telemetryConfig.IntervalDuration(),
+		telemetryConfig.Types,
+		cfg.Sensor.Zones,
+		logger,
+	)
+
+	alt := alerts.New(
+		b,
+		info.Name,
+		alertConfig.IntervalDuration(),
+		cfg.Sensor.Zones,
 		logger,
 	)
 
 	return &Domain{
 		Discovery: disc,
 		Telemetry: tel,
+		Alerts:    alt,
 	}
 }

@@ -34,12 +34,17 @@ internal/           → Private application packages
   config/           → Shared configuration (three-phase finalize)
   sensor/           → Sensor module wiring (domain.go, routes.go, api.go)
     telemetry/      → Telemetry publisher domain (System + Handler)
+    alerts/         → Alert publisher domain with NATS headers (System + Handler)
   dispatch/         → Dispatch module wiring (domain.go, routes.go, api.go)
     monitoring/     → Telemetry monitoring domain (System + Handler)
+    alerting/       → Alert monitoring domain with queue groups (System + Handler)
 pkg/                → Reusable library packages
   lifecycle/        → Startup/shutdown coordination
   bus/              → Message bus System (connection + subscription management)
   signal/           → Signal envelope type
+  contracts/        → Shared cross-service contracts
+    telemetry/      → Telemetry subject constants + Reading type
+    alerts/         → Alert priority type, header keys, subject constants
   discovery/        → Discovery domain (System + Handler + ServiceInfo)
   routes/           → Route group composition
   module/           → HTTP module/router system
@@ -90,14 +95,74 @@ air -c .air.sensor.toml
 air -c .air.dispatch.toml
 ```
 
+## NATS Concepts
+
+### Subjects
+
+Subjects are dot-delimited strings that form a routing hierarchy. Publishers send to a subject; subscribers match against it.
+
+- **Literal** — `signal.discovery.ping` matches exactly one subject
+- **Single-token wildcard (`*`)** — `signal.telemetry.temp.*` matches `signal.telemetry.temp.zone-a` but not `signal.telemetry.humidity.zone-a`
+- **Multi-token wildcard (`>`)** — `signal.telemetry.>` matches all subjects starting with `signal.telemetry.`, at any depth
+
+### Pub/Sub (Phase 1–2)
+
+Fire-and-forget messaging. A publisher sends a message to a subject; every active subscriber on that subject receives a copy. No acknowledgment, no persistence. If no subscriber is listening, the message is lost.
+
+### Request/Reply (Phase 1)
+
+A publisher sends a request and collects responses within a timeout. NATS creates a unique inbox subject for replies. Used for discovery ping — broadcast a request, gather responses from all listening services.
+
+### Queue Groups (Phase 3)
+
+Queue groups turn fan-out into work distribution. Multiple subscribers join a named group; NATS delivers each message to exactly one member of the group.
+
+- **Subscribe** (fan-out) — Every subscriber gets every message. Good for observation where each instance needs the full picture.
+- **QueueSubscribe** (work distribution) — Each message goes to one group member. Good for processing where each message should be handled once. Think of it like a load balancer distributing jobs across runner nodes.
+
+Adding members increases throughput. Removing a member redistributes its share automatically — no configuration change needed.
+
+### Message Headers (Phase 3)
+
+HTTP-like key-value metadata attached to NATS messages without modifying the payload. Headers travel alongside the message but are decoded separately from the body. Useful for routing metadata (priority, source, trace IDs) that subscribers can inspect without deserializing the full payload.
+
 ## NATS Subject Namespace
 
 | Subject Pattern | Purpose |
 |---|---|
 | `signal.discovery.ping` | Service discovery |
 | `signal.telemetry.{type}.{zone}` | Sensor readings |
+| `signal.alerts.{severity}` | Priority-tagged alerts |
 | `signal.control.{target}` | Adjustment commands |
 | `signal.threshold.{key}` | Configuration changes |
+
+## API Endpoints
+
+### Sensor (`:3000`)
+
+| Method | Endpoint | Phase | Description |
+|---|---|---|---|
+| `GET` | `/healthz` | 1 | Health check |
+| `GET` | `/readyz` | 1 | Readiness check |
+| `POST` | `/api/discovery/ping` | 1 | Broadcast discovery ping, collect service responses |
+| `POST` | `/api/telemetry/start` | 2 | Start telemetry publisher |
+| `POST` | `/api/telemetry/stop` | 2 | Stop telemetry publisher |
+| `GET` | `/api/telemetry/status` | 2 | Publisher state (running, interval, types, zones) |
+| `POST` | `/api/alerts/start` | 3 | Start alert publisher with NATS headers |
+| `POST` | `/api/alerts/stop` | 3 | Stop alert publisher |
+| `GET` | `/api/alerts/status` | 3 | Alert publisher state |
+
+### Dispatch (`:3001`)
+
+| Method | Endpoint | Phase | Description |
+|---|---|---|---|
+| `GET` | `/healthz` | 1 | Health check |
+| `GET` | `/readyz` | 1 | Readiness check |
+| `POST` | `/api/discovery/ping` | 1 | Broadcast discovery ping, collect service responses |
+| `GET` | `/api/monitoring/stream` | 2 | SSE stream of telemetry signals |
+| `GET` | `/api/monitoring/status` | 2 | Subscription state, message counts |
+| `GET` | `/api/alerting/stream` | 3 | SSE stream of alerts (queue group distributed) |
+| `GET` | `/api/alerting/status` | 3 | Alert subscription state, message counts |
 
 ## Demonstration Phases
 
