@@ -21,7 +21,7 @@ func (c *ServiceConfig) Addr() string {
 }
 
 // Finalize applies defaults, environment overrides, and validation.
-// envPrefix distinguishes services (e.g. "SENSOR", "DISPATCH")
+// envPrefix distinguishes services (e.g. "ALPHA", "BETA").
 func (c *ServiceConfig) Finalize(envPrefix string) error {
 	c.loadDefaults()
 	c.loadEnv(envPrefix)

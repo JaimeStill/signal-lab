@@ -96,10 +96,10 @@ Adapt from `~/code/herald/pkg/handlers/handlers.go`:
 Root config with three-phase finalize:
 ```go
 type Config struct {
-    Bus             BusConfig      `json:"bus"`
-    Sensor          ServiceConfig  `json:"sensor"`
-    Dispatch        ServiceConfig  `json:"dispatch"`
-    ShutdownTimeout string         `json:"shutdown_timeout"`
+    Bus             BusConfig   `json:"bus"`
+    Alpha           AlphaConfig `json:"alpha"`
+    Beta            BetaConfig  `json:"beta"`
+    ShutdownTimeout string      `json:"shutdown_timeout"`
 }
 ```
 - `Load() (*Config, error)` — load from config files + env vars
@@ -124,34 +124,34 @@ type BusConfig struct {
 }
 ```
 
-**`internal/sensor/api.go`**
-Module assembly for sensor service. Creates mux, registers discovery routes, applies middleware.
+**`internal/alpha/api.go`**
+Module assembly for alpha service. Creates mux, registers discovery routes, applies middleware.
 
-**`internal/sensor/discovery.go`**
-- NATS subscription handler: listens on `signal.discovery.ping`, replies with sensor's `ServiceInfo`
+**`internal/alpha/discovery.go`**
+- NATS subscription handler: listens on `signal.discovery.ping`, replies with alpha's `ServiceInfo`
 - HTTP handler: `POST /api/discovery/ping` — publishes ping, collects replies with timeout, returns `[]ServiceInfo`
 
-**`internal/dispatch/api.go`**
-Module assembly for dispatch service (mirrors sensor pattern).
+**`internal/beta/api.go`**
+Module assembly for beta service (mirrors alpha pattern).
 
-**`internal/dispatch/discovery.go`**
-Same discovery pattern as sensor, responding with dispatch's `ServiceInfo`.
+**`internal/beta/discovery.go`**
+Same discovery pattern as alpha, responding with beta's `ServiceInfo`.
 
 ### cmd/ — Entry points
 
-**`cmd/sensor/main.go`**
+**`cmd/alpha/main.go`**
 Process entry: signal handling (SIGINT/SIGTERM), config load, server init, `server.Start()`, wait for signal, `server.Shutdown()`.
 
-**`cmd/sensor/server.go`**
+**`cmd/alpha/server.go`**
 Server struct: holds config, lifecycle coordinator, NATS connection, HTTP server. `Start()` connects to NATS, starts HTTP, waits for startup. `Shutdown()` drains NATS, stops HTTP.
 
-**`cmd/sensor/http.go`**
+**`cmd/alpha/http.go`**
 HTTP server lifecycle: `ListenAndServe()`, graceful shutdown with timeout.
 
-**`cmd/sensor/modules.go`**
-Assembles sensor API module, health/readiness endpoints, middleware stack (CORS + Logger).
+**`cmd/alpha/modules.go`**
+Assembles alpha API module, health/readiness endpoints, middleware stack (CORS + Logger).
 
-**`cmd/dispatch/`** — mirrors `cmd/sensor/` structure, loads dispatch config section.
+**`cmd/beta/`** — mirrors `cmd/alpha/` structure, loads beta config section.
 
 ## Herald Files to Reference
 
@@ -161,20 +161,20 @@ Assembles sensor API module, health/readiness endpoints, middleware stack (CORS 
 | `pkg/module/module.go` + `router.go` | `pkg/module/` |
 | `pkg/middleware/middleware.go` | `pkg/middleware/middleware.go` |
 | `pkg/handlers/handlers.go` | `pkg/handlers/handlers.go` |
-| `cmd/server/main.go` | `cmd/sensor/main.go`, `cmd/dispatch/main.go` |
-| `cmd/server/server.go` | `cmd/sensor/server.go`, `cmd/dispatch/server.go` |
-| `cmd/server/http.go` | `cmd/sensor/http.go`, `cmd/dispatch/http.go` |
-| `cmd/server/modules.go` | `cmd/sensor/modules.go`, `cmd/dispatch/modules.go` |
+| `cmd/server/main.go` | `cmd/alpha/main.go`, `cmd/beta/main.go` |
+| `cmd/server/server.go` | `cmd/alpha/server.go`, `cmd/beta/server.go` |
+| `cmd/server/http.go` | `cmd/alpha/http.go`, `cmd/beta/http.go` |
+| `cmd/server/modules.go` | `cmd/alpha/modules.go`, `cmd/beta/modules.go` |
 | `internal/config/config.go` | `internal/config/config.go` |
 | `internal/config/server.go` | `internal/config/server.go` |
 
 ## Verification
 
 1. `docker compose up -d` — NATS healthy
-2. `mise run sensor` (terminal 1) — boots on :3000, connects to NATS
-3. `mise run dispatch` (terminal 2) — boots on :3001, connects to NATS
+2. `mise run alpha` (terminal 1) — boots on :3000, connects to NATS
+3. `mise run beta` (terminal 2) — boots on :3001, connects to NATS
 4. `curl http://localhost:3000/healthz` → `{"status": "ok"}`
 5. `curl http://localhost:3001/healthz` → `{"status": "ok"}`
-6. `curl -X POST http://localhost:3000/api/discovery/ping` → JSON array containing dispatch's ServiceInfo
-7. `curl -X POST http://localhost:3001/api/discovery/ping` → JSON array containing sensor's ServiceInfo
+6. `curl -X POST http://localhost:3000/api/discovery/ping` → JSON array containing beta's ServiceInfo
+7. `curl -X POST http://localhost:3001/api/discovery/ping` → JSON array containing alpha's ServiceInfo
 8. `mise run test` — all tests pass

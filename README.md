@@ -1,21 +1,37 @@
-# signal-lab
+# Signal Lab
 
-A progressive [NATS](https://nats.io) learning repository built around two Go web services — **sensor** and **dispatch** — that communicate via signal-based coordination through a shared message bus.
+A progressive [NATS](https://nats.io) learning repository built around two Go web services — `alpha` and `beta` — that act as generic participants in signal-based coordination through a shared NATS bus. Each phase adds a new self-contained domain that illustrates one NATS capability.
+
+## Table of contents
+
+- [Overview](#overview)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Development](#development)
+  - [Project Structure](#project-structure)
+- [Demonstrations](#demonstrations)
+  - [Phase 1 — Foundation + Discovery Ping](#phase-1--foundation--discovery-ping)
+  - [Phase 2 — Telemetry Pub/Sub](#phase-2--telemetry-pubsub)
+  - [Phase 3 — Queue Groups + Headers (Runner Cluster)](#phase-3--queue-groups--headers-runner-cluster)
 
 ## Overview
 
-signal-lab explores NATS capabilities through concrete demonstrations exposed as HTTP endpoints on real web services. Each phase introduces new NATS concepts, building from basic pub/sub to durable streams, distributed state, and real-time WebSocket projection.
+signal-lab explores NATS capabilities through concrete demonstrations exposed as HTTP endpoints on real web services. The two runtimes — `alpha` (the dependent service) and `beta` (the functional service) — are generic participants in a multi-service communication architecture. Each phase adds a new pair of domain packages that illustrate one NATS concept in isolation, from basic pub/sub through queue-group work distribution, durable streams, distributed state, object storage, and real-time browser projection.
 
-**Sensor** publishes simulated environment telemetry (temperature, humidity, pressure) and responds to control adjustments. **Dispatch** monitors telemetry, evaluates thresholds, and sends adjustment signals to drive sensor state toward desired targets. Communication flows exclusively through NATS — neither service calls the other directly.
+Phases do not depend on each other. The runtime is the shared substrate; each phase exercises it in a different way. Communication between alpha and beta flows exclusively through NATS — neither service calls the other directly.
 
-## Prerequisites
+See [`_project/README.md`](_project/README.md) for detailed architecture documentation and the full phase roadmap.
+
+## Getting Started
+
+### Prerequisites
 
 - [Go](https://go.dev/) 1.26+
 - [Docker](https://www.docker.com/) + Docker Compose
 - [mise](https://mise.jdx.dev/) (task runner)
 - [air](https://github.com/air-verse/air) (hot reload, optional)
 
-## Getting Started
+### Development
 
 Start the NATS infrastructure:
 
@@ -29,107 +45,187 @@ Run the services in separate terminals:
 
 ```bash
 # Terminal 1
-mise run sensor
+mise run alpha
 
 # Terminal 2
-mise run dispatch
+mise run beta
 ```
 
-Sensor listens on `:3000`, dispatch on `:3001`.
+Alpha listens on `:3000`, beta on `:3001`.
 
-## Demonstration Phases
+Additional tasks:
 
-Each phase explores a set of NATS capabilities, adding new HTTP endpoints to both services. Phases are implemented sequentially, each in its own branch and PR.
+```bash
+mise run test    # run all tests (go test ./tests/...)
+mise run vet     # run go vet
+```
 
-| Phase | Focus | NATS Concepts |
-|---|---|---|
-| [Phase 1](_project/phase-01.md) | Foundation + Discovery Ping | Core pub/sub, request/reply, structured payloads |
-| [Phase 2](_project/phase-02.md) | Telemetry Pub/Sub | Subject hierarchies, wildcard subscriptions |
-| [Phase 3](_project/phase-03.md) | Queue Groups + Headers | Load balancing, message metadata |
-| [Phase 4](_project/phase-04.md) | Bidirectional Control | Command/control, closed-loop coordination |
-| [Phase 5](_project/phase-05.md) | JetStream | Durable streams, consumers, replay |
-| [Phase 6](_project/phase-06.md) | Key-Value Store | Distributed state, watches, optimistic concurrency |
-| [Phase 7](_project/phase-07.md) | Object Store | Large blob storage, chunked transfer |
-| [Phase 8](_project/phase-08.md) | WebSocket Projection | Real-time signal visualization in browser |
+Hot reload:
 
-## Project Structure
+```bash
+air -c .air.alpha.toml
+air -c .air.beta.toml
+```
+
+### Project Structure
 
 ```
-cmd/                → Service entry points
-  sensor/           → Environment monitoring service (:3000)
-  dispatch/         → Response coordination service (:3001)
+cmd/                → Service entry points (package main)
+  alpha/            → Dependent service (:3000)
+  beta/             → Functional service (:3001)
 internal/           → Private application packages
-  config/           → Shared configuration
-  sensor/           → Sensor module wiring + domain sub-packages
-    telemetry/      → Telemetry publisher domain
-  dispatch/         → Dispatch module wiring + domain sub-packages
-    monitoring/     → Telemetry monitoring domain
+  config/           → Shared configuration with three-phase finalize
+  alpha/            → Alpha module wiring + per-phase domain sub-packages
+    monitoring/     → Telemetry subscriber (Phase 2)
+    jobs/           → Job dispatcher (Phase 3)
+  beta/             → Beta module wiring + per-phase domain sub-packages
+    telemetry/      → Telemetry publisher (Phase 2)
+    runners/        → Runner cluster with queue groups (Phase 3)
 pkg/                → Reusable library packages
   lifecycle/        → Startup/shutdown coordination
   bus/              → Message bus System (connection + subscriptions)
   signal/           → Signal envelope type
-  discovery/        → Discovery domain (System + Handler)
+  discovery/        → Discovery domain (System + Handler + ServiceInfo)
   routes/           → Route group composition
   module/           → HTTP module/router system
   middleware/       → HTTP middleware (Logger)
   handlers/         → JSON response helpers
+  contracts/        → Shared cross-service contracts
+    telemetry/      → Telemetry subjects + Reading type (Phase 2)
+    jobs/           → Jobs subjects + Job type + header keys (Phase 3)
 tests/              → Black-box tests mirroring source structure
 _project/           → Architecture docs and phase implementation briefs
 ```
 
-## API
+## Demonstrations
 
-### Both Services
+Each demonstration pairs a NATS concept with a concrete domain implementation. Every subsection below covers one phase and documents the concept being illustrated, the domain established to facilitate it, the API endpoints within that domain, and copy-paste execution instructions.
+
+New phase subsections are added here as each phase ships.
+
+### Phase 1 — Foundation + Discovery Ping
+
+**NATS concept:** request/reply with inbox subjects. A requester broadcasts to a subject and collects all responses that arrive within a timeout window.
+
+**Domain:** `pkg/discovery/` provides a shared discovery `System` used by both services. Each service publishes its `ServiceInfo` when it receives a ping and can initiate discovery as a requester via an HTTP endpoint.
+
+**API endpoints (both services):**
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/healthz` | Health check |
+| `GET` | `/healthz` | Liveness check |
 | `GET` | `/readyz` | Readiness check |
-| `POST` | `/api/discovery/ping` | Discover other services via NATS |
+| `POST` | `/api/discovery/ping` | Broadcast ping on `signal.discovery.ping`, return collected service responses |
 
-### Sensor (`:3000`)
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/telemetry/start` | Begin publishing simulated readings |
-| `POST` | `/api/telemetry/stop` | Stop publishing |
-| `GET` | `/api/telemetry/status` | Publisher state (running, interval, types, zones) |
-
-### Dispatch (`:3001`)
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/monitoring/stream` | SSE stream of received telemetry signals |
-| `GET` | `/api/monitoring/status` | Subscription state and message counts |
+**Execution:**
 
 ```bash
-# discover other services (requires both services running)
+# terminal 1
+mise run alpha
+
+# terminal 2
+mise run beta
+
+# discover from either side
 curl -s -X POST localhost:3000/api/discovery/ping | jq
-
-# start telemetry publisher
-curl -s -X POST localhost:3000/api/telemetry/start | jq
-
-# stream telemetry on dispatch (Ctrl+C to stop)
-curl -s -N localhost:3001/api/monitoring/stream
-
-# check monitoring counts
-curl -s localhost:3001/api/monitoring/status | jq
-
-# stop telemetry publisher
-curl -s -X POST localhost:3000/api/telemetry/stop | jq
+curl -s -X POST localhost:3001/api/discovery/ping | jq
 ```
 
-## Development
+### Phase 2 — Telemetry Pub/Sub
+
+**NATS concept:** subject hierarchies and wildcard subscriptions. Publishers emit on `signal.telemetry.{type}.{zone}`; subscribers match with `signal.telemetry.>` to receive the whole hierarchy at any depth.
+
+**Domain:** `internal/beta/telemetry/` publishes simulated environment readings (temperature, humidity, pressure) on a ticker across configured zones. `internal/alpha/monitoring/` subscribes to the full telemetry wildcard, tracks per-subject counts, and exposes an SSE stream of incoming signals.
+
+**API endpoints:**
+
+| Service | Method | Path | Description |
+|---|---|---|---|
+| beta | `POST` | `/api/telemetry/start` | Begin publishing simulated readings |
+| beta | `POST` | `/api/telemetry/stop` | Stop publishing |
+| beta | `GET` | `/api/telemetry/status` | Publisher state (running, interval, types, zones) |
+| alpha | `GET` | `/api/monitoring/stream` | SSE stream of received telemetry signals |
+| alpha | `GET` | `/api/monitoring/status` | Subscription state and per-subject counts |
+
+**Execution:**
 
 ```bash
-mise run sensor       # run sensor service
-mise run dispatch     # run dispatch service
-mise run test         # run all tests
-mise run vet          # run go vet
-
-# hot reload
-air -c .air.sensor.toml
-air -c .air.dispatch.toml
+curl -s -X POST localhost:3001/api/telemetry/start | jq
+curl -s -N localhost:3000/api/monitoring/stream    # Ctrl+C to stop
+curl -s localhost:3000/api/monitoring/status | jq
+curl -s -X POST localhost:3001/api/telemetry/stop | jq
 ```
 
-See [`_project/README.md`](_project/README.md) for detailed architecture documentation.
+### Phase 3 — Queue Groups + Headers (Runner Cluster)
+
+**NATS concept:** queue-group subscriptions distribute each message to exactly one member of a named group — turning fan-out into work distribution. NATS headers carry routing metadata (priority, type, trace ID) alongside the payload, inspectable without decoding the body. Members can be attached and detached dynamically; NATS redistributes the remaining members' share without any publisher reconfiguration.
+
+**Domain:** `internal/alpha/jobs/` publishes jobs on `signal.jobs.{type}` with headers for job ID, priority, type, and trace ID. `internal/beta/runners/` spawns N in-process runners (`runner-0`, `runner-1`, ...) all joined to the `beta-runners` queue group. Each runner owns its own subscription handle, counts, and lifecycle — the cluster is a thin coordinator that iterates over runners. Cluster-level operations are eager idempotent; per-runner operations are idempotent-via-error.
+
+**API endpoints:**
+
+| Service | Method | Path | Description |
+|---|---|---|---|
+| alpha | `POST` | `/api/jobs/start` | Begin publishing jobs |
+| alpha | `POST` | `/api/jobs/stop` | Stop publishing |
+| alpha | `GET` | `/api/jobs/status` | Publisher state (running, interval) |
+| beta | `POST` | `/api/runners/subscribe` | Attach every runner in the cluster |
+| beta | `POST` | `/api/runners/unsubscribe` | Drain every runner in the cluster |
+| beta | `POST` | `/api/runners/{id}/subscribe` | Attach a single runner by ID |
+| beta | `POST` | `/api/runners/{id}/unsubscribe` | Drain a single runner by ID |
+| beta | `GET` | `/api/runners/status` | Cluster state with per-runner subscription state and counts |
+
+**Execution:**
+
+```bash
+# Start jobs and watch initial distribution across all runners
+curl -s -X POST localhost:3000/api/jobs/start | jq
+sleep 3
+curl -s localhost:3001/api/runners/status | jq
+
+# Detach one runner mid-stream and observe redistribution
+curl -s -X POST localhost:3001/api/runners/runner-0/unsubscribe | jq
+sleep 3
+curl -s localhost:3001/api/runners/status | jq    # runner-0 frozen; others pick up its share
+
+# Reattach the runner and observe rebalancing
+curl -s -X POST localhost:3001/api/runners/runner-0/subscribe | jq
+sleep 3
+curl -s localhost:3001/api/runners/status | jq
+
+# Drain the entire cluster (jobs stop being processed by anyone)
+curl -s -X POST localhost:3001/api/runners/unsubscribe | jq
+sleep 2
+curl -s localhost:3001/api/runners/status | jq    # all subscribed: false, counts frozen
+
+# Reattach the cluster and stop publishing
+curl -s -X POST localhost:3001/api/runners/subscribe | jq
+curl -s -X POST localhost:3000/api/jobs/stop | jq
+```
+
+The `/api/runners/status` response shows per-runner subscription state and per-subject counts (runner count reflects `runtime.NumCPU()` by default):
+
+```json
+{
+  "subscribed": true,
+  "count": 4,
+  "runners": {
+    "runner-0": {
+      "subscribed": true,
+      "counts": {"signal.jobs.compute": 3, "signal.jobs.io": 2}
+    },
+    "runner-1": {
+      "subscribed": true,
+      "counts": {"signal.jobs.compute": 2, "signal.jobs.analysis": 4}
+    },
+    "runner-2": {
+      "subscribed": true,
+      "counts": {"signal.jobs.io": 3, "signal.jobs.analysis": 2}
+    },
+    "runner-3": {
+      "subscribed": true,
+      "counts": {"signal.jobs.compute": 3, "signal.jobs.io": 2}
+    }
+  }
+}
+```

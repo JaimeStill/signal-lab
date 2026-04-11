@@ -1,0 +1,8 @@
+root = "."
+tmp_dir = "tmp/beta"
+
+[build]
+cmd = "go build -o ./tmp/beta/server ./cmd/beta"
+bin = "./tmp/beta/server"
+include_ext = ["go", "json"]
+exclude_dir = ["tmp", "tests", "cmd/alpha", "internal/alpha"]
