@@ -8,7 +8,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/JaimeStill/signal-lab/internal/sensor/telemetry"
+	"github.com/JaimeStill/signal-lab/internal/beta/telemetry"
 	"github.com/JaimeStill/signal-lab/pkg/bus"
 	"github.com/JaimeStill/signal-lab/pkg/lifecycle"
 	"github.com/JaimeStill/signal-lab/pkg/signal"
@@ -42,7 +42,7 @@ func startBus(t *testing.T) bus.System {
 func newTelemetry(b bus.System) telemetry.System {
 	return telemetry.New(
 		b,
-		"test-sensor",
+		"test-beta",
 		200*time.Millisecond,
 		[]string{"temp", "humidity"},
 		[]string{"zone-a"},
@@ -142,8 +142,8 @@ func TestPublishesReadings(t *testing.T) {
 		t.Fatal("failed to decode signal:", err)
 	}
 
-	if sig.Source != "test-sensor" {
-		t.Fatalf("expected source 'test-sensor', got %q", sig.Source)
+	if sig.Source != "test-beta" {
+		t.Fatalf("expected source 'test-beta', got %q", sig.Source)
 	}
 
 	var reading telemetry.Reading

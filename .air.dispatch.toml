@@ -1,8 +1,0 @@
-root = "."
-tmp_dir = "tmp/dispatch"
-
-[build]
-cmd = "go build -o ./tmp/dispatch/server ./cmd/dispatch"
-bin = "./tmp/dispatch/server"
-include_ext = ["go", "json"]
-exclude_dir = ["tmp", "tests", "cmd/sensor", "internal/sensor"]

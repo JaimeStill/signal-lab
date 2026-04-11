@@ -13,8 +13,8 @@ func TestLoadDefaultConfig(t *testing.T) {
 	dir := t.TempDir()
 	writeConfig(t, dir, "config.json", `{
 		"bus": {"url": "nats://localhost:4222", "max_reconnects": 5, "reconnect_wait": "1s", "response_timeout": "500ms"},
-		"sensor": {"port": 3000, "name": "sensor", "description": "test sensor"},
-		"dispatch": {"port": 3001, "name": "dispatch", "description": "test dispatch"},
+		"alpha": {"port": 3000, "name": "alpha", "description": "test alpha"},
+		"beta": {"port": 3001, "name": "beta", "description": "test beta"},
 		"shutdown_timeout": "10s"
 	}`)
 
@@ -28,11 +28,11 @@ func TestLoadDefaultConfig(t *testing.T) {
 	if cfg.Bus.URL() != "nats://localhost:4222" {
 		t.Fatalf("expected bus URL 'nats://localhost:4222', got %q", cfg.Bus.URL())
 	}
-	if cfg.Sensor.Port != 3000 {
-		t.Fatalf("expected sensor port 3000, got %d", cfg.Sensor.Port)
+	if cfg.Alpha.Port != 3000 {
+		t.Fatalf("expected alpha port 3000, got %d", cfg.Alpha.Port)
 	}
-	if cfg.Dispatch.Port != 3001 {
-		t.Fatalf("expected dispatch port 3001, got %d", cfg.Dispatch.Port)
+	if cfg.Beta.Port != 3001 {
+		t.Fatalf("expected beta port 3001, got %d", cfg.Beta.Port)
 	}
 }
 
@@ -40,8 +40,8 @@ func TestEnvVarOverrides(t *testing.T) {
 	dir := t.TempDir()
 	writeConfig(t, dir, "config.json", `{
 		"bus": {"url": "nats://localhost:4222", "max_reconnects": 5, "reconnect_wait": "1s", "response_timeout": "500ms"},
-		"sensor": {"port": 3000, "name": "sensor", "description": "test"},
-		"dispatch": {"port": 3001, "name": "dispatch", "description": "test"},
+		"alpha": {"port": 3000, "name": "alpha", "description": "test"},
+		"beta": {"port": 3001, "name": "beta", "description": "test"},
 		"shutdown_timeout": "10s"
 	}`)
 
@@ -88,8 +88,8 @@ func TestOverlayLoading(t *testing.T) {
 	dir := t.TempDir()
 	writeConfig(t, dir, "config.json", `{
 		"bus": {"url": "nats://localhost:4222", "max_reconnects": 5, "reconnect_wait": "1s", "response_timeout": "500ms"},
-		"sensor": {"port": 3000, "name": "sensor", "description": "base"},
-		"dispatch": {"port": 3001, "name": "dispatch", "description": "base"},
+		"alpha": {"port": 3000, "name": "alpha", "description": "base"},
+		"beta": {"port": 3001, "name": "beta", "description": "base"},
 		"shutdown_timeout": "10s"
 	}`)
 	writeConfig(t, dir, "config.docker.json", `{

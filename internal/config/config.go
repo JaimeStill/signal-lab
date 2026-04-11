@@ -18,10 +18,10 @@ const (
 
 // Config is the root configuration for signal-lab services.
 type Config struct {
-	Bus             BusConfig     `json:"bus"`
-	Sensor          SensorConfig  `json:"sensor"`
-	Dispatch        ServiceConfig `json:"dispatch"`
-	ShutdownTimeout string        `json:"shutdown_timeout"`
+	Bus             BusConfig   `json:"bus"`
+	Beta            BetaConfig  `json:"beta"`
+	Alpha           AlphaConfig `json:"alpha"`
+	ShutdownTimeout string      `json:"shutdown_timeout"`
 }
 
 // Env returns the SIGNAL_ENV value, defaulting to "local".
@@ -80,8 +80,8 @@ func (c *Config) Merge(overlay *Config) {
 		c.ShutdownTimeout = overlay.ShutdownTimeout
 	}
 	c.Bus.Merge(&overlay.Bus)
-	c.Sensor.Merge(&overlay.Sensor)
-	c.Dispatch.Merge(&overlay.Dispatch)
+	c.Beta.Merge(&overlay.Beta)
+	c.Alpha.Merge(&overlay.Alpha)
 }
 
 func (c *Config) finalize() error {
@@ -94,11 +94,11 @@ func (c *Config) finalize() error {
 	if err := c.Bus.Finalize(); err != nil {
 		return fmt.Errorf("bus: %w", err)
 	}
-	if err := c.Sensor.Finalize("SENSOR"); err != nil {
-		return fmt.Errorf("sensor: %w", err)
+	if err := c.Beta.Finalize("BETA"); err != nil {
+		return fmt.Errorf("beta: %w", err)
 	}
-	if err := c.Dispatch.Finalize("DISPATCH"); err != nil {
-		return fmt.Errorf("dispatch: %w", err)
+	if err := c.Alpha.Finalize("ALPHA"); err != nil {
+		return fmt.Errorf("alpha: %w", err)
 	}
 	return nil
 }

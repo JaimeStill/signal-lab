@@ -1,58 +1,78 @@
-# Phase 4 — Bidirectional Control
+# Phase 4 — Request/Reply Command Dispatch
 
-**Branch:** `phase-04-control`
+**Branch:** `phase-04-request-reply`
 
 ## NATS Concepts
 
-- **Request/reply for command/control** — Using NATS request/reply to send commands and receive acknowledgments
-- **Bidirectional signal flow** — Both services act as publishers and subscribers simultaneously
-- **Closed-loop coordination** — Continuous feedback cycle: observe → evaluate → adjust → observe
+- **Request/reply with reply inboxes** — A requester calls `nc.Request(subject, body, timeout)`; NATS auto-generates a unique reply inbox, publishes the request, and waits for the first response. The responder replies to the message's `Reply` field without knowing the inbox ahead of time.
+- **Timeouts** — Requests specify a timeout; if no response arrives, the call returns an error. The requester decides what timeout budget is reasonable for each operation.
+- **Point-to-point correlation** — Unlike Phase 1's broadcast discovery (which collects all responses within a window), Phase 4's request/reply pattern is a one-to-one RPC-style exchange: one request, one reply.
 
 ## Objective
 
-Dispatch evaluates incoming telemetry against target thresholds and sends adjustment signals back to sensor. Sensor receives adjustments and mutates its simulated state, creating a closed control loop where sensor readings trend toward dispatch's desired targets.
+Alpha issues commands to beta via NATS request/reply and waits for acknowledgments. Beta hosts a responder that subscribes to the command subject hierarchy, executes a small simulated action per command, maintains a ledger of executed commands, and replies with a result. Alpha keeps a history of issued commands and their replies (or timeout errors). The demonstration shows synchronous-over-async command dispatch fully isolated from every other phase's domain.
+
+## Domain
+
+**Shared contract (`pkg/contracts/commands/`):**
+- `SubjectPrefix = "signal.commands"` and `SubjectWildcard = "signal.commands.>"`
+- `Action` enum: `ping`, `flush`, `rotate`, `noop` (representative commands with no real side effects)
+- `Command{ID, Action, Payload, IssuedAt}` request type
+- `Response{CommandID, Status, Result, HandledAt}` reply type, where `Status` is `ok` or `error`
+- Subject format: `signal.commands.{action}` — responder subscribes to the wildcard and dispatches internally by action
+
+**Alpha `commander` domain (`internal/alpha/commander/`):**
+- `System` interface with `Issue(action, payload) (Response, error)`, `History() []HistoryEntry`, `Handler() *Handler`
+- `Issue` wraps `bus.Conn().Request(subject, body, timeout)` and records the outcome (response or timeout error) in an in-memory history ring
+- `timeout` comes from config (e.g., `AlphaConfig.Commander.Timeout`); default `"2s"`
+- History ring bounded (e.g., last 64 entries) so it doesn't grow unbounded
+
+**Beta `responder` domain (`internal/beta/responder/`):**
+- `System` interface with `Subscribe() error`, `Ledger() []contracts.Command`, `Handler() *Handler`
+- `Subscribe` uses `bus.Subscribe(contracts.SubjectWildcard, onCommand)` where `onCommand` decodes the request, dispatches to an action handler, appends to the ledger, and calls `msg.Respond(reply)` to send the response
+- Per-action handlers are simple: `ping` returns "pong", `flush`/`rotate` append a ledger entry and return "ok", unknown actions return an error response
+- Ledger is an append-only in-memory slice with the last N entries exposed
+
+## Configuration
+
+**`CommanderConfig`** (alpha sub-config):
+- `Timeout string` — request timeout duration (e.g., `"2s"`)
+- Env var `SIGNAL_COMMANDER_TIMEOUT`
+
+Beta's responder is subscribe-at-startup — no dedicated config needed beyond what already exists.
 
 ## New Endpoints
 
 ```
-Dispatch:
-  POST /api/control/adjust      → manually send adjustment to sensor
-  GET  /api/control/status      → current target thresholds, active adjustments
+Alpha:
+  POST /api/commander/issue          → issue a command: body {action, payload}, returns the reply or 504 on timeout
+  GET  /api/commander/history        → most recent issued commands with their replies or errors
 
-Sensor:
-  GET  /api/control/state       → current adjustments applied, simulated state
+Beta:
+  GET  /api/responder/ledger         → commands executed by the responder, in order
 ```
 
-## Control Loop Design
+## Subject Namespace
 
-1. Sensor emits telemetry reading (e.g., `temp.zone-a = 85°F`)
-2. Dispatch receives reading, compares against target (e.g., target = 72°F)
-3. Dispatch publishes adjustment to `signal.control.sensor` (e.g., `{"type": "temp", "zone": "zone-a", "delta": -13}`)
-4. Sensor receives adjustment, modifies its simulation parameters
-5. Sensor's next readings trend toward target (not instant — gradual convergence)
+```
+signal.commands.ping
+signal.commands.flush
+signal.commands.rotate
+signal.commands.noop
+```
 
-## Files to Create/Modify
-
-**`internal/dispatch/control.go`**
-- Target threshold state (in-memory for now, KV store in Phase 6)
-- Evaluation logic: compare telemetry against targets
-- Publish adjustments to `signal.control.{target-service}`
-- HTTP handlers for manual adjust and status
-
-**`internal/sensor/control.go`**
-- Subscribe to `signal.control.sensor` on startup
-- Apply adjustments to simulation parameters
-- Gradual convergence: readings drift toward target over multiple cycles
-- HTTP handler for current control state
-
-**`internal/sensor/api.go`** — add control routes
-**`internal/dispatch/api.go`** — add control routes
+Responder subscribes to `signal.commands.>`.
 
 ## Verification
 
-1. Start both services, begin telemetry publishing
-2. `GET /api/control/status` on dispatch → shows default thresholds
-3. `POST /api/control/adjust` on dispatch → sends manual adjustment
-4. `GET /api/control/state` on sensor → shows applied adjustment
-5. Observe telemetry readings gradually trending toward target values
-6. SSE stream shows convergence over time
+1. Start both services.
+2. `POST /api/commander/issue` on alpha with `{"action": "ping"}` → returns a 200 response containing beta's reply (`{"status": "ok", "result": "pong"}`).
+3. `GET /api/responder/ledger` on beta → shows the ping command.
+4. `GET /api/commander/history` on alpha → shows the issued command and its reply.
+5. Issue a command with an unknown action like `{"action": "explode"}` → responder replies with an error status, alpha records it in history, HTTP response reflects the error.
+6. Stop beta (shut down cleanly or kill it), then issue another command from alpha → the request times out, alpha's history records the timeout, HTTP returns 504 Gateway Timeout.
+7. Restart beta, issue again → successful round-trip resumes.
+
+## Phase Independence
+
+This phase does not depend on Phase 2's telemetry, Phase 3's jobs/runners, or any other phase's domain. The command/control loop exists entirely within its own subject namespace and its own pair of domain packages, and the responder's "simulated state" (ledger) is self-contained with no cross-phase references.

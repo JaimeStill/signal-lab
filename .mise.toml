@@ -1,10 +1,10 @@
-[tasks.sensor]
-description = "Run sensor service"
-run = "go run ./cmd/sensor"
+[tasks.alpha]
+description = "Run alpha service"
+run = "go run ./cmd/alpha"
 
-[tasks.dispatch]
-description = "Run dispatch service"
-run = "go run ./cmd/dispatch"
+[tasks.beta]
+description = "Run beta service"
+run = "go run ./cmd/beta"
 
 [tasks.test]
 description = "Run all tests"
