@@ -1,24 +1,29 @@
 package beta
 
 import (
-	"log/slog"
 	"net/http"
 
 	"github.com/JaimeStill/signal-lab/internal/config"
-	"github.com/JaimeStill/signal-lab/pkg/bus"
-	"github.com/JaimeStill/signal-lab/pkg/discovery"
+	"github.com/JaimeStill/signal-lab/internal/infrastructure"
 	"github.com/JaimeStill/signal-lab/pkg/module"
 )
 
 // NewModule creates the beta API module with discovery, telemetry, and runners
 // domains and registers their lifecycle subscriptions on the bus.
 func NewModule(
-	b bus.System,
-	info discovery.ServiceInfo,
+	infra *infrastructure.Infrastructure,
 	cfg *config.Config,
-	logger *slog.Logger,
 ) (*module.Module, error) {
-	domain := NewDomain(b, info, cfg, logger)
+	rt := &Runtime{
+		Infrastructure:    infra,
+		ResponseTimeout:   cfg.Bus.ResponseTimeoutDuration(),
+		TelemetryInterval: cfg.Beta.Telemetry.IntervalDuration(),
+		TelemetryTypes:    cfg.Beta.Telemetry.Types,
+		Zones:             cfg.Beta.Zones,
+		RunnerCount:       cfg.Beta.Runners.Number(),
+	}
+
+	domain := NewDomain(rt)
 
 	if err := domain.Discovery.Subscribe(); err != nil {
 		return nil, err

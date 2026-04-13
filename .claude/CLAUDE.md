@@ -13,7 +13,7 @@ signal-lab follows the Layered Composition Architecture (LCA) from herald: cold 
 ### Package Structure
 
 - `cmd/` — Entry points (`package main`), one per service
-- `internal/` — Private application packages (config, service-specific domains)
+- `internal/` — Private application packages (config, infrastructure, service-specific domains)
 - `pkg/` — Reusable library packages (lifecycle, bus, signal, discovery, routes, module, middleware, handlers)
 - `pkg/contracts/` — Shared cross-service contracts (types, constants, subject prefixes, header keys)
 
@@ -57,6 +57,14 @@ Infrastructure and domain packages expose a `System` interface with an unexporte
 - **Domain systems** (`pkg/discovery/`, `internal/{service}/{domain}/`): `New()` creates the system, `Subscribe()` initializes bus subscriptions, `Handler()` returns the HTTP handler
 
 Systems are the primary unit of composition. Each system owns its own bus interactions and produces its own handler via factory method.
+
+### Infrastructure Pattern
+
+The `internal/infrastructure/` package provides a single `Infrastructure` struct that bundles the four cross-cutting subsystems every service needs: `Lifecycle`, `Logger`, `Bus`, and `ServiceInfo` (plus `ShutdownTimeout`). It is constructed once at server startup via `infrastructure.New(cfg, svc, logger)` — config is consumed during construction to derive subsystems, not retained as a field — and threaded through the wiring layer.
+
+Each service defines a `Runtime` struct in its module package (`internal/alpha/`, `internal/beta/`) that embeds `*Infrastructure` and adds service-specific config values consumed by domain system constructors. Runtime is built in `NewModule` from Infrastructure + config, then passed to `NewDomain`, which unpacks it into the primitives each domain constructor expects. Domain constructors never see Infrastructure or Runtime directly — they receive unpacked values (`bus.System`, `*slog.Logger`, `time.Duration`, etc.).
+
+Wiring-layer signatures: `buildHandler(infra, cfg)` → `NewModule(infra, cfg)` → `NewDomain(rt)`.
 
 ### Domain Separation
 
@@ -116,22 +124,29 @@ Development follows the `/iterative-dev` workflow with GitHub issues and impleme
 
 ### Role Separation
 
-**Developer implements:** All source code, configuration files, infrastructure definitions.
+**Developer owns:** Production source code, configuration files, infrastructure definitions. Source code is written *without* doc comments — those are added by the AI during closeout.
 
-**AI owns:** Tests (`tests/`), documentation (CLAUDE.md, README, `_project/`), godoc and source comments, implementation guides, contextual artifacts (commit messages, PRs, issues), and memory updates.
+**AI owns:**
+- **Tests** — creation and maintenance under `tests/`
+- **Documentation** — repo root `README.md`, project docs (`_project/`), `CLAUDE.md`, memory files
+- **Source comments** — godoc on exported types/functions/methods; explanatory inline comments where logic is non-obvious
+- **Project-management artifacts** — commit messages, PR bodies, issue creation/edits
+- **Implementation guides** — the reference document the developer follows
 
 ### Implementation Guide Content Boundary
 
-Implementation guides are reference documents the developer follows to write source code. They must contain only what falls within developer responsibility. Specifically, implementation guides MUST NOT include:
+Implementation guides are reference documents the developer follows to write source code. Guide conventions:
 
-- **Godoc comments or source-code comments.** These are added by the AI during closeout. Code blocks in the guide should show the structural skeleton without doc comments cluttering them.
-- **Test code.** Tests are an AI responsibility during closeout.
-- **Documentation updates.** Changes to CLAUDE.md, README, `_project/`, memory files, or any other AI-owned doc surface are out of scope for the guide.
-- **Project-management artifacts.** Commit messages, PR bodies, issue rewrites, label changes — all AI work.
+- **Existing files**: show incremental changes only (never replace entire files)
+- **New files**: provide the structural skeleton — types, function signatures, function bodies — *without* doc comments. Code blocks read as design intent, not final source.
+- **Exclude entirely from guide code blocks:**
+  - Godoc / docstrings — the AI adds these during closeout
+  - Test code — the AI writes tests during closeout
+  - Documentation updates of any kind — root `README.md`, project docs, `CLAUDE.md`, memory files
+  - Project-management artifacts — issue rewrites, label changes, commit messages, PR bodies
+- **Guide-level commentary belongs in the guide's prose** between code blocks. Explain how a piece fits the larger picture, reference other steps, flag integration concerns. This commentary lives in the guide only — it MUST NOT be transcribed into source files as comments.
 
-Comments that DO appear inside guide code blocks must be **developer-facing integration commentary** — guidance for the developer reading the guide about how a piece fits into the larger picture (e.g., "this Subscribe is the cluster-level entrypoint, see Step 7 for wiring"). Such commentary is part of the *guide's* prose layer; it must NOT be transcribed into the source files. The developer reads it once for context, then writes the source code without it.
-
-When in doubt: if the line would still belong in the file after a `git blame` six months later, it goes in the source. If it's only useful while the developer is following the guide, it stays in the guide.
+Litmus test: if a line would still belong in the file after a `git blame` six months later, it goes in the source. If it's only useful while the developer is following the guide, it stays in the guide as prose.
 
 ### Workflow
 

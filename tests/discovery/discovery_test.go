@@ -42,7 +42,6 @@ func newInfo(name string) discovery.ServiceInfo {
 		ID:          "test-id-" + name,
 		Name:        name,
 		Endpoint:    "http://localhost:0",
-		Health:      "ok",
 		Description: "test " + name,
 	}
 }

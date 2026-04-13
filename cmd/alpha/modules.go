@@ -2,35 +2,30 @@ package main
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 
 	"github.com/JaimeStill/signal-lab/internal/alpha"
 	"github.com/JaimeStill/signal-lab/internal/config"
-	"github.com/JaimeStill/signal-lab/pkg/bus"
-	"github.com/JaimeStill/signal-lab/pkg/discovery"
+	"github.com/JaimeStill/signal-lab/internal/infrastructure"
 	"github.com/JaimeStill/signal-lab/pkg/lifecycle"
 	"github.com/JaimeStill/signal-lab/pkg/middleware"
 	"github.com/JaimeStill/signal-lab/pkg/module"
 )
 
 func buildHandler(
-	lc *lifecycle.Coordinator,
-	b bus.System,
-	info discovery.ServiceInfo,
+	infra *infrastructure.Infrastructure,
 	cfg *config.Config,
-	logger *slog.Logger,
 ) (http.Handler, error) {
-	router := buildRouter(lc)
+	router := buildRouter(infra.Lifecycle)
 
-	mod, err := alpha.NewModule(b, info, cfg, logger)
+	mod, err := alpha.NewModule(infra, cfg)
 	if err != nil {
 		return nil, err
 	}
 	router.Mount(mod)
 
 	mw := middleware.New()
-	mw.Use(middleware.Logger(logger))
+	mw.Use(middleware.Logger(infra.Logger))
 
 	return mw.Apply(router), nil
 }

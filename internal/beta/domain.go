@@ -1,12 +1,8 @@
 package beta
 
 import (
-	"log/slog"
-
 	"github.com/JaimeStill/signal-lab/internal/beta/runners"
 	"github.com/JaimeStill/signal-lab/internal/beta/telemetry"
-	"github.com/JaimeStill/signal-lab/internal/config"
-	"github.com/JaimeStill/signal-lab/pkg/bus"
 	"github.com/JaimeStill/signal-lab/pkg/discovery"
 
 	contracts "github.com/JaimeStill/signal-lab/pkg/contracts/jobs"
@@ -20,34 +16,28 @@ type Domain struct {
 }
 
 // NewDomain creates the beta domain systems.
-func NewDomain(
-	b bus.System,
-	info discovery.ServiceInfo,
-	cfg *config.Config,
-	logger *slog.Logger,
-) *Domain {
+func NewDomain(rt *Runtime) *Domain {
 	disc := discovery.New(
-		b, info,
-		cfg.Bus.ResponseTimeoutDuration(),
-		logger,
+		rt.Bus, rt.Info,
+		rt.ResponseTimeout,
+		rt.Logger,
 	)
 
-	telemetryConfig := &cfg.Beta.Telemetry
 	tel := telemetry.New(
-		b,
-		info.Name,
-		telemetryConfig.IntervalDuration(),
-		telemetryConfig.Types,
-		cfg.Beta.Zones,
-		logger,
+		rt.Bus,
+		rt.Info.Name,
+		rt.TelemetryInterval,
+		rt.TelemetryTypes,
+		rt.Zones,
+		rt.Logger,
 	)
 
 	run := runners.New(
-		b,
-		cfg.Beta.Runners.Number(),
+		rt.Bus,
+		rt.RunnerCount,
 		contracts.SubjectWildcard,
 		runners.QueueGroup,
-		logger,
+		rt.Logger,
 	)
 
 	return &Domain{
