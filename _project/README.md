@@ -34,6 +34,7 @@ cmd/                → Entry points (package main), one per service
   beta/             → Functional service (:3001)
 internal/           → Private application packages
   config/           → Shared configuration (three-phase finalize)
+  infrastructure/   → Infrastructure struct (Lifecycle, Bus, Logger, ServiceInfo)
   alpha/            → Alpha module wiring + per-phase domain sub-packages
     monitoring/     → Phase 2 telemetry subscriber
     jobs/           → Phase 3 job dispatcher

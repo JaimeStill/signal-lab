@@ -1,12 +1,8 @@
 package alpha
 
 import (
-	"log/slog"
-
 	"github.com/JaimeStill/signal-lab/internal/alpha/jobs"
 	"github.com/JaimeStill/signal-lab/internal/alpha/monitoring"
-	"github.com/JaimeStill/signal-lab/internal/config"
-	"github.com/JaimeStill/signal-lab/pkg/bus"
 	"github.com/JaimeStill/signal-lab/pkg/discovery"
 )
 
@@ -18,24 +14,19 @@ type Domain struct {
 }
 
 // NewDomain creates the alpha domain systems.
-func NewDomain(
-	b bus.System,
-	info discovery.ServiceInfo,
-	cfg *config.Config,
-	logger *slog.Logger,
-) *Domain {
+func NewDomain(rt *Runtime) *Domain {
 	return &Domain{
 		Discovery: discovery.New(
-			b, info,
-			cfg.Bus.ResponseTimeoutDuration(),
-			logger,
+			rt.Bus, rt.Info,
+			rt.ResponseTimeout,
+			rt.Logger,
 		),
-		Monitor: monitoring.New(b, logger),
+		Monitor: monitoring.New(rt.Bus, rt.Logger),
 		Jobs: jobs.New(
-			b,
-			info.Name,
-			cfg.Alpha.Jobs.IntervalDuration(),
-			logger,
+			rt.Bus,
+			rt.Info.Name,
+			rt.JobInterval,
+			rt.Logger,
 		),
 	}
 }

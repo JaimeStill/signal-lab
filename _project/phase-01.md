@@ -71,7 +71,6 @@ type ServiceInfo struct {
     Name        string `json:"name"`
     ID          string `json:"id"`
     Endpoint    string `json:"endpoint"`
-    Health      string `json:"health"`
     Description string `json:"description"`
 }
 ```
