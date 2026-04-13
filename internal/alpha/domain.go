@@ -1,8 +1,10 @@
 package alpha
 
 import (
+	"github.com/JaimeStill/signal-lab/internal/alpha/commander"
 	"github.com/JaimeStill/signal-lab/internal/alpha/jobs"
 	"github.com/JaimeStill/signal-lab/internal/alpha/monitoring"
+	contracts "github.com/JaimeStill/signal-lab/pkg/contracts/commands"
 	"github.com/JaimeStill/signal-lab/pkg/discovery"
 )
 
@@ -11,6 +13,7 @@ type Domain struct {
 	Discovery discovery.System
 	Monitor   monitoring.System
 	Jobs      jobs.System
+	Commander commander.System
 }
 
 // NewDomain creates the alpha domain systems.
@@ -26,6 +29,14 @@ func NewDomain(rt *Runtime) *Domain {
 			rt.Bus,
 			rt.Info.Name,
 			rt.JobInterval,
+			rt.Logger,
+		),
+		Commander: commander.New(
+			rt.Bus,
+			rt.Info.Name,
+			contracts.SubjectPrefix,
+			rt.CommandTimeout,
+			rt.CommandMaxHistory,
 			rt.Logger,
 		),
 	}

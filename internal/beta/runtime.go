@@ -10,9 +10,10 @@ import (
 // consumed by domain system constructors. Built in NewModule, passed to NewDomain.
 type Runtime struct {
 	*infrastructure.Infrastructure
-	ResponseTimeout   time.Duration
-	TelemetryInterval time.Duration
-	TelemetryTypes    []string
-	Zones             []string
-	RunnerCount       int
+	ResponseTimeout    time.Duration
+	TelemetryInterval  time.Duration
+	TelemetryTypes     []string
+	Zones              []string
+	RunnerCount        int
+	ResponderMaxLedger int
 }

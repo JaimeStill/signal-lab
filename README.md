@@ -13,6 +13,7 @@ A progressive [NATS](https://nats.io) learning repository built around two Go we
   - [Phase 1 — Foundation + Discovery Ping](#phase-1--foundation--discovery-ping)
   - [Phase 2 — Telemetry Pub/Sub](#phase-2--telemetry-pubsub)
   - [Phase 3 — Queue Groups + Headers (Runner Cluster)](#phase-3--queue-groups--headers-runner-cluster)
+  - [Phase 4 — Request/Reply Command Dispatch](#phase-4--requestreply-command-dispatch)
 
 ## Overview
 
@@ -79,9 +80,11 @@ internal/           → Private application packages
   alpha/            → Alpha module wiring + per-phase domain sub-packages
     monitoring/     → Telemetry subscriber (Phase 2)
     jobs/           → Job dispatcher (Phase 3)
+    commander/      → Command issuer with request/reply (Phase 4)
   beta/             → Beta module wiring + per-phase domain sub-packages
     telemetry/      → Telemetry publisher (Phase 2)
     runners/        → Runner cluster with queue groups (Phase 3)
+    responder/      → Command responder with per-action dispatch (Phase 4)
 pkg/                → Reusable library packages
   lifecycle/        → Startup/shutdown coordination
   bus/              → Message bus System (connection + subscriptions)
@@ -94,6 +97,7 @@ pkg/                → Reusable library packages
   contracts/        → Shared cross-service contracts
     telemetry/      → Telemetry subjects + Reading type (Phase 2)
     jobs/           → Jobs subjects + Job type + header keys (Phase 3)
+    commands/       → Command subjects + Action/Status enums + Command/Response types (Phase 4)
 tests/              → Black-box tests mirroring source structure
 _project/           → Architecture docs and phase implementation briefs
 ```
@@ -229,4 +233,44 @@ The `/api/runners/status` response shows per-runner subscription state and per-s
     }
   }
 }
+```
+
+### Phase 4 — Request/Reply Command Dispatch
+
+**NATS concept:** point-to-point request/reply with reply inboxes and timeouts. A requester calls `nc.Request(subject, body, timeout)`; NATS auto-generates a unique reply inbox, publishes the request, and waits for the first response. The responder replies to the message's `Reply` field via `msg.Respond()`. Unlike Phase 1's broadcast discovery (which collects all responses within a window), Phase 4 is a one-to-one RPC-style exchange: one request, one reply.
+
+**Domain:** `internal/alpha/commander/` issues commands on `signal.commands.{action}` and records the outcome (response or timeout) in a bounded in-memory history. `internal/beta/responder/` subscribes to `signal.commands.>`, dispatches per-action handlers (ping → "pong", flush → "flushed", rotate → "rotated", noop → "noop", unknown → error), maintains an in-memory ledger of handled commands, and replies with a result. The shared contract in `pkg/contracts/commands/` defines the action enum, status enum, and Command/Response payload types.
+
+**API endpoints:**
+
+| Service | Method | Path | Description |
+|---|---|---|---|
+| alpha | `POST` | `/api/commander/issue` | Issue a command: body `{"action":"...","payload":"..."}`, returns the reply or 504 on timeout |
+| alpha | `GET` | `/api/commander/history` | Recent issued commands with their replies or error states |
+| beta | `GET` | `/api/responder/ledger` | Commands executed by the responder, in order |
+
+**Execution:**
+
+```bash
+# Issue a ping command — beta responds with "pong"
+curl -s -X POST localhost:3000/api/commander/issue -d '{"action":"ping"}' | jq
+
+# Try all known actions
+curl -s -X POST localhost:3000/api/commander/issue -d '{"action":"flush"}' | jq
+curl -s -X POST localhost:3000/api/commander/issue -d '{"action":"rotate"}' | jq
+curl -s -X POST localhost:3000/api/commander/issue -d '{"action":"noop"}' | jq
+
+# Issue an unknown action — responder replies with error status
+curl -s -X POST localhost:3000/api/commander/issue -d '{"action":"explode"}' | jq
+
+# Check the responder's ledger on beta
+curl -s localhost:3001/api/responder/ledger | jq
+
+# Check the commander's history on alpha (newest first)
+curl -s localhost:3000/api/commander/history | jq
+
+# Stop beta, then issue a command — demonstrates timeout (504)
+# (stop beta in its terminal, then:)
+curl -s -X POST localhost:3000/api/commander/issue -d '{"action":"ping"}' | jq
+# Restart beta — commands resume successfully
 ```
