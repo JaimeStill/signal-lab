@@ -38,9 +38,11 @@ internal/           → Private application packages
   alpha/            → Alpha module wiring + per-phase domain sub-packages
     monitoring/     → Phase 2 telemetry subscriber
     jobs/           → Phase 3 job dispatcher
+    commander/      → Phase 4 command issuer (request/reply)
   beta/             → Beta module wiring + per-phase domain sub-packages
     telemetry/      → Phase 2 telemetry publisher
     runners/        → Phase 3 runner cluster (Runner primitive + cluster System)
+    responder/      → Phase 4 command responder (per-action dispatch + ledger)
 pkg/                → Reusable library packages
   lifecycle/        → Startup/shutdown coordination
   bus/              → Message bus System (connection + subscription management)
@@ -48,6 +50,7 @@ pkg/                → Reusable library packages
   contracts/        → Shared cross-service contracts
     telemetry/      → Telemetry subject constants + Reading type
     jobs/           → Jobs subject constants + Job type + header keys
+    commands/       → Command subject constants + Action/Status enums + Command/Response types
   discovery/        → Discovery domain (System + Handler + ServiceInfo)
   routes/           → Route group composition
   module/           → HTTP module/router system
@@ -77,7 +80,7 @@ Layered configuration with the `SIGNAL_` env var prefix:
 
 Each config struct follows the three-phase finalize pattern: `loadDefaults()` → `loadEnv()` → `validate()`.
 
-`ServiceConfig` holds only shared web service fields (Host, Port, Name, Description). Service-specific configs embed `ServiceConfig` and add domain sub-configs. `AlphaConfig` embeds `ServiceConfig` and adds `JobsConfig`. `BetaConfig` embeds `ServiceConfig` and adds `Zones`, `TelemetryConfig`, and `RunnersConfig`.
+`ServiceConfig` holds only shared web service fields (Host, Port, Name, Description). Service-specific configs embed `ServiceConfig` and add domain sub-configs. `AlphaConfig` embeds `ServiceConfig` and adds `JobsConfig` and `CommanderConfig`. `BetaConfig` embeds `ServiceConfig` and adds `Zones`, `TelemetryConfig`, `RunnersConfig`, and `ResponderConfig`.
 
 ## Docker Infrastructure
 
@@ -185,6 +188,8 @@ NATS's built-in WebSocket gateway allows browser clients (via the `nats.ws` Java
 | `POST` | `/api/jobs/start` | 3 | Start the jobs publisher |
 | `POST` | `/api/jobs/stop` | 3 | Stop the jobs publisher |
 | `GET` | `/api/jobs/status` | 3 | Publisher state (running, interval) |
+| `POST` | `/api/commander/issue` | 4 | Issue a command, return reply or 504 on timeout |
+| `GET` | `/api/commander/history` | 4 | Recent issued commands with replies or errors |
 
 ### Beta (`:3001`)
 
@@ -201,6 +206,7 @@ NATS's built-in WebSocket gateway allows browser clients (via the `nats.ws` Java
 | `POST` | `/api/runners/{id}/subscribe` | 3 | Attach a single runner by ID |
 | `POST` | `/api/runners/{id}/unsubscribe` | 3 | Drain a single runner by ID |
 | `GET` | `/api/runners/status` | 3 | Cluster state with per-runner subscription state and counts |
+| `GET` | `/api/responder/ledger` | 4 | Commands executed by the responder, in order |
 
 ## Demonstration Phases
 

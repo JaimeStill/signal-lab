@@ -10,12 +10,13 @@ const EnvBetaZones = "SIGNAL_BETA_ZONES"
 
 // BetaConfig is the beta service configuration. It embeds ServiceConfig for
 // shared web service fields and adds the beta-specific Zones list,
-// TelemetryConfig, and RunnersConfig sub-configs.
+// TelemetryConfig, RunnersConfig, and ResponderConfig sub-configs.
 type BetaConfig struct {
 	ServiceConfig
 	Zones     []string        `json:"zones"`
 	Telemetry TelemetryConfig `json:"telemetry"`
 	Runners   RunnersConfig   `json:"runners"`
+	Responder ResponderConfig `json:"responder"`
 }
 
 // Finalize applies defaults, environment overrides, validation,
@@ -37,6 +38,9 @@ func (c *BetaConfig) Finalize(envPrefix string) error {
 	if err := c.Runners.Finalize(); err != nil {
 		return fmt.Errorf("runners: %w", err)
 	}
+	if err := c.Responder.Finalize(); err != nil {
+		return fmt.Errorf("responder: %w", err)
+	}
 
 	return nil
 }
@@ -51,6 +55,7 @@ func (c *BetaConfig) Merge(overlay *BetaConfig) {
 
 	c.Telemetry.Merge(&overlay.Telemetry)
 	c.Runners.Merge(&overlay.Runners)
+	c.Responder.Merge(&overlay.Responder)
 }
 
 func (c *BetaConfig) loadDefaults() {

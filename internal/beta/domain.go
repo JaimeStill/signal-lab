@@ -1,11 +1,13 @@
 package beta
 
 import (
+	"github.com/JaimeStill/signal-lab/internal/beta/responder"
 	"github.com/JaimeStill/signal-lab/internal/beta/runners"
 	"github.com/JaimeStill/signal-lab/internal/beta/telemetry"
 	"github.com/JaimeStill/signal-lab/pkg/discovery"
 
-	contracts "github.com/JaimeStill/signal-lab/pkg/contracts/jobs"
+	cmdcontracts "github.com/JaimeStill/signal-lab/pkg/contracts/commands"
+	jobcontracts "github.com/JaimeStill/signal-lab/pkg/contracts/jobs"
 )
 
 // Domain assembles all beta domain systems.
@@ -13,6 +15,7 @@ type Domain struct {
 	Discovery discovery.System
 	Telemetry telemetry.System
 	Runners   runners.System
+	Responder responder.System
 }
 
 // NewDomain creates the beta domain systems.
@@ -35,8 +38,15 @@ func NewDomain(rt *Runtime) *Domain {
 	run := runners.New(
 		rt.Bus,
 		rt.RunnerCount,
-		contracts.SubjectWildcard,
+		jobcontracts.SubjectWildcard,
 		runners.QueueGroup,
+		rt.Logger,
+	)
+
+	resp := responder.New(
+		rt.Bus,
+		cmdcontracts.SubjectWildcard,
+		rt.ResponderMaxLedger,
 		rt.Logger,
 	)
 
@@ -44,5 +54,6 @@ func NewDomain(rt *Runtime) *Domain {
 		Discovery: disc,
 		Telemetry: tel,
 		Runners:   run,
+		Responder: resp,
 	}
 }

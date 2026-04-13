@@ -8,16 +8,18 @@ import (
 	"github.com/JaimeStill/signal-lab/pkg/module"
 )
 
-// NewModule creates the alpha API module with discovery, monitoring, and jobs
-// domains and registers their lifecycle subscriptions on the bus.
+// NewModule creates the alpha API module with discovery, monitoring, jobs, and
+// commander domains and registers their lifecycle subscriptions on the bus.
 func NewModule(
 	infra *infrastructure.Infrastructure,
 	cfg *config.Config,
 ) (*module.Module, error) {
 	rt := &Runtime{
-		Infrastructure:  infra,
-		ResponseTimeout: cfg.Bus.ResponseTimeoutDuration(),
-		JobInterval:     cfg.Alpha.Jobs.IntervalDuration(),
+		Infrastructure:    infra,
+		ResponseTimeout:   cfg.Bus.ResponseTimeoutDuration(),
+		JobInterval:       cfg.Alpha.Jobs.IntervalDuration(),
+		CommandTimeout:    cfg.Alpha.Commander.TimeoutDuration(),
+		CommandMaxHistory: cfg.Alpha.Commander.MaxHistory,
 	}
 
 	domain := NewDomain(rt)

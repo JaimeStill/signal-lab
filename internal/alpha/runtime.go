@@ -10,6 +10,8 @@ import (
 // consumed by domain system constructors. Built in NewModule, passed to NewDomain.
 type Runtime struct {
 	*infrastructure.Infrastructure
-	ResponseTimeout time.Duration
-	JobInterval     time.Duration
+	ResponseTimeout   time.Duration
+	JobInterval       time.Duration
+	CommandTimeout    time.Duration
+	CommandMaxHistory int
 }

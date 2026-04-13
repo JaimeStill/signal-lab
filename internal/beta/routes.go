@@ -10,11 +10,13 @@ func registerRoutes(mux *http.ServeMux, domain *Domain) {
 	discoveryHandler := domain.Discovery.Handler()
 	telemetryHandler := domain.Telemetry.Handler()
 	runnersHandler := domain.Runners.Handler()
+	responderHandler := domain.Responder.Handler()
 
 	routes.Register(
 		mux,
 		discoveryHandler.Routes(),
 		telemetryHandler.Routes(),
 		runnersHandler.Routes(),
+		responderHandler.Routes(),
 	)
 }
